@@ -1,0 +1,26 @@
+# Async-Grad
+
+Your new tool for asynchronous deep learning
+
+## Description
+
+This repository contains the code to reproduce the results presented in the submission.
+
+## Usage
+
+1. To reproduce the CIFAR-10 results for revnet18:
+    ```sh
+    python main.py --no-git --dataset cifar10 --batch-size 64 -p 78 --workers 4 --model revnet18_2 --synchronous --optimizer sgd --lr 0.1 --weight-decay 0.0005 --no-bn-weight-decay --nesterov --store-vjp --remove-ctx-input --remove-ctx-param --accumulation-steps 2 --accumulation-averaging --goyal-lr-scaling --scheduler steplr --max-epoch 300 --warm-up 5 --lr-decay-fact 0.1 --lr-decay-milestones 150 225
+    python main.py --no-git --dataset cifar10 --batch-size 64 -p 78 --workers 4 --model revnet18_2 --optimizer sgd --lr 0.1 --weight-decay 0.0005 --no-bn-weight-decay --nesterov --remove-ctx-input --remove-ctx-param --accumulation-steps 2 --accumulation-averaging --goyal-lr-scaling --scheduler steplr --max-epoch 300 --warm-up 5 --lr-decay-fact 0.1 --lr-decay-milestones 150 225
+    ```
+
+2. To reproduce the ImageNet32 results for revnet34:
+    ```sh
+    python main.py --no-git --dataset imagenet32 --dir [PATH TO DATASET] --batch-size 64 -p 2001 --workers 4 --model revnet34_2 --synchronous --optimizer sgd --lr 0.1 --weight-decay 0.0001 --no-bn-weight-decay --nesterov --store-vjp --remove-ctx-input --remove-ctx-param --accumulation-steps 2 --accumulation-averaging --goyal-lr-scaling --scheduler steplr --max-epoch 90 --warm-up 5 --lr-decay-fact 0.1 --lr-decay-milestones 30 60 80
+    python main.py --no-git --dataset imagenet32 --dir [PATH TO DATASET] --batch-size 64 -p 2001 --workers 4 --model revnet34_2 --optimizer sgd --lr 0.1 --weight-decay 0.0001 --no-bn-weight-decay --nesterov --remove-ctx-input --remove-ctx-param --accumulation-steps 2 --accumulation-averaging --goyal-lr-scaling --scheduler steplr --max-epoch 90 --warm-up 5 --lr-decay-fact 0.1 --lr-decay-milestones 30 60 80
+    ```
+3. To reproduce the ImageNet results for revnet50:
+    ```sh
+    python main.py --no-git --dataset imagenet --dir [PATH TO DATASET] --batch-size 64 -p 2001 --workers 16 --model revnet50_2_variant_2 --synchronous --optimizer sgd --lr 0.1 --weight-decay 0.0001 --no-bn-weight-decay --nesterov --store-vjp --remove-ctx-input --remove-ctx-param --accumulation-steps 4 --accumulation-averaging --goyal-lr-scaling --scheduler steplr --max-epoch 90 --warm-up 5 --lr-decay-fact 0.1 --lr-decay-milestones 30 60 80
+    python main.py --no-git --dataset imagenet --dir [PATH TO DATASET] --batch-size 64 -p 2001 --workers 16 --model revnet50_2_variant_2 --optimizer sgd --lr 0.1 --weight-decay 0.0001 --no-bn-weight-decay --nesterov --remove-ctx-input --remove-ctx-param --accumulation-steps 4 --accumulation-averaging --goyal-lr-scaling --scheduler steplr --max-epoch 90 --warm-up 5 --lr-decay-fact 0.1 --lr-decay-milestones 30 60 80
+    ```
