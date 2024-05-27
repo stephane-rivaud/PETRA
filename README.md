@@ -6,6 +6,10 @@ Your new tool for asynchronous deep learning
 
 This repository contains the code to reproduce the results presented in "PETRA: Parallel End-to-end Training with Reversible Architectures". (Link available soon)
 
+<div style="text-align: center;">
+   <img src="./img/petra.jpg" alt="Standard Delayed Gradient vs PETRA" width="600"/>
+</div>
+
 ## Usage
 
 1. To reproduce the CIFAR-10 results for revnet18:
