@@ -63,6 +63,7 @@ class ImageNetDownSample(data.Dataset):
     test_list = [
         ['val_data'],
     ]
+    data_dir = 'data/imagenet32'
 
     def __init__(self, root, train=True,
                  transform=None, target_transform=None):
@@ -70,6 +71,9 @@ class ImageNetDownSample(data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.train = train  # training set or test set
+
+        if not check_imagenet32():
+            prepare_imagenet32()
 
         # now load the picked numpy arrays
         if self.train:
@@ -166,8 +170,7 @@ class ImageNetDownSample(data.Dataset):
         return fmt_str
 
 
-if __name__ == '__main__':
-    import os
+def prepare_imagenet32():
     import urllib
     import zipfile
 
@@ -199,3 +202,27 @@ if __name__ == '__main__':
 
     # Delete zip file
     os.remove(local_filename)
+
+
+def check_imagenet32():
+    # Check that data directory exists
+    data_dir = "data/imagenet32"
+    if not os.path.isdir(data_dir):
+        return False
+    # Check training data
+    for split in range(1, 11):
+        batch_split_path = os.path.join(data_dir, f'train_data_batch_{split}')
+        if not os.path.isfile(batch_split_path):
+            return False
+    # Check validation data
+    val_split_path = os.path.join(data_dir, 'val_data')
+    if not os.path.isfile(val_split_path):
+        return False
+    return True
+
+
+if __name__ == '__main__':
+    if not check_imagenet32():
+        prepare_imagenet32()
+    else:
+        print('ImageNet32 dataset is already there.')

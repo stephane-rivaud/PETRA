@@ -60,8 +60,8 @@ def get_dataset(dataset, dir):
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
 
-        train_dataset = ImageNetDownSample(root=dir, train=True, transform=transform_train)
-        test_dataset = ImageNetDownSample(root=dir, train=False, transform=transform_test)
+        train_dataset = ImageNetDownSample(root=ImageNetDownSample.data_dir, train=True, transform=transform_train)
+        test_dataset = ImageNetDownSample(root=ImageNetDownSample.data_dir, train=False, transform=transform_test)
 
     elif dataset == 'imagenet':
         input_size = (3, 224, 224)
