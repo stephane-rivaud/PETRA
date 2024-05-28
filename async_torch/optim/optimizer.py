@@ -116,7 +116,7 @@ class LARS:
 
                 if param_norm != 0 and grad_norm != 0:
                     # calculate adaptive lr + weight decay
-                    adaptive_lr = self.trust_coefficient * (param_norm) / (
+                    adaptive_lr = self.trust_coefficient * param_norm / (
                             grad_norm + param_norm * self.weight_decay + self.eps)
 
                     # clip learning rate for LARC

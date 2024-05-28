@@ -278,6 +278,7 @@ class AsynchronousGenericLayer:
 
         Parameters
         ----------
+        output
         grad_output : tuple of torch.tensor or a torch.tensor
             a list which corresponds to the gradient_outputs which will be processed
         input_id : int

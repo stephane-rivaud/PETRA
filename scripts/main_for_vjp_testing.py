@@ -1,4 +1,4 @@
-'''Train CIFAR10 with PyTorch.'''
+"""Train CIFAR10 with PyTorch."""
 
 import os
 import sys

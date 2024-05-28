@@ -10,7 +10,22 @@ This repository contains the code to reproduce the results presented in "PETRA: 
    <img src="./img/petra.jpg" alt="Standard Delayed Gradient vs PETRA" width="600"/>
 </div>
 
+## Requiremets
+
+```sh
+pip install pytorch
+```
+
 ## Usage
+
+```sh
+python main.py --dataset DATASET --batch-size BATCH_SIZE -p PRINT_FREQUENCY --workers WORKERS --model MODEL \
+[--synchronous] [--store-vjp] [remove-ctx-input] [--remove-ctx-param] [--approximate-input] \
+--accumulation-steps ACCUMULATION_STEPS [--accumulation-averaging] \
+--optimizer OPTIMIZER --lr LEARNING_RATE --weight-decay WEIGHT_DECAY [--no-bn-weight-decay] [--nesterov] \
+--scheduler steplr --max-epoch NUM_EPOCHS --warm-up NUM_WARMUP_EPOCHS --lr-decay-fact LR_DECAY_FACTOR --lr-decay-milestones LR_DECAY_MILESTONES [--goyal-lr-scaling]
+```
+
 
 1. To reproduce the CIFAR-10 results for revnet18:
     ```sh

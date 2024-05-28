@@ -164,3 +164,38 @@ class ImageNetDownSample(data.Dataset):
         tmp = '    Target Transforms (if any): '
         fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
+
+
+if __name__ == '__main__':
+    import os
+    import urllib
+    import zipfile
+
+    # # Define data directory
+    data_dir = "data/imagenet32"
+    os.makedirs(data_dir, exist_ok=True)
+
+    # Download zip file
+    url = "https://figshare.com/ndownloader/articles/4959980/versions/2"
+    local_filename = os.path.join(data_dir, 'imagenet32.zip')
+    urllib.request.urlretrieve(url, local_filename)
+    print(f'\nDownload completed: {local_filename}')
+
+    # Path to the zip file
+    zip_file_path = local_filename
+
+    # Directory to extract the contents to
+    extract_to_dir = data_dir
+
+    # Ensure the extract directory exists
+    os.makedirs(extract_to_dir, exist_ok=True)
+
+    # Open the zip file
+    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        # Extract all the contents
+        zip_ref.extractall(extract_to_dir)
+
+    print(f'Files extracted to: {extract_to_dir}')
+
+    # Delete zip file
+    os.remove(local_filename)
