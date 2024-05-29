@@ -12,7 +12,7 @@ import time
 import argparse
 from functools import partial
 
-from scripts.dataset import get_dataset
+from dataset import get_dataset
 from async_torch.layers.compression import get_quantizer, QuantizSimple
 from async_torch.models.utils import get_model
 from async_torch.sequential_layers import AsynchronousSequential, SynchronousSequential, AsynchronousParallel
@@ -108,12 +108,15 @@ def get_args():
     # git
     parser.add_argument('--no-git', action='store_true', default=False,
                         help='Prevent from accessing git informations.')
+    # wandb
     parser.add_argument('--use-wandb', action='store_true', default=False,
                         help='Use wandb for logging')
+    parser.add_argument('--wandb-project', default='PETRA', type=str,
+                        help='wandb project name')
+    parser.add_argument('--wandb-entity', default='streethagore', type=str,
+                        help='wandb entity')
     parser.add_argument('--wandb-offline', action='store_true', default=False,
                         help='Forces wandb into offline mode.')
-    parser.add_argument('--wandb-project', default='Asynchronous-Torch', type=str,
-                        help='wandb project name')
 
     return parser.parse_args()
 
@@ -262,7 +265,7 @@ if __name__ == '__main__':
         if args.wandb_offline:
             os.environ["WANDB_MODE"] = "offline"
         os.environ["WANDB__SERVICE_WAIT"] = "300"
-        run = wandb.init(project=args.wandb_project, entity=None, config=args, resume=True, id=run_id)
+        run = wandb.init(project=args.wandb_project, entity=args.wandb_entity, config=args, resume=resume, id=run_id)
     else:
         run_id = None
 

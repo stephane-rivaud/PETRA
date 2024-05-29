@@ -13,8 +13,8 @@ import time
 import argparse
 from functools import partial
 
-from scripts.dataset import get_dataset
-from async_torch.layers.compression import get_quantizer, QuantizSimple
+from dataset import get_dataset
+from async_torch.layers.compression import get_quantizer
 from async_torch.models.utils import get_model
 from async_torch.sequential_layers import AsynchronousSequential, SynchronousSequential, AsynchronousParallel
 from scripts.utils import ProgressMeter, AverageMeter, accuracy, get_git_revision_hash, get_git_active_branch
