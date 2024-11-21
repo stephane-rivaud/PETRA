@@ -18,6 +18,7 @@ fi
 conda_env="petra-12.4"
 echo $conda_env
 conda activate $conda_env
+conda info --envs
 
 # ----- Parameters -----
 # job parameters
