@@ -9,11 +9,11 @@
 #SBATCH --output=slurm/%x-%j.out
 #SBATCH --error=slurm/%x-%j.err
 
-if [ -f /home/tau/strivaud/miniconda3/bin/activate ]; then
-  source /home/tau/strivaud/miniconda3/bin/activate
-elif [ -f /usr/local/miniconda/bin/activate ]; then
-  source /usr/local/miniconda/bin/activate
-fi
+#if [ -f /home/tau/strivaud/miniconda3/bin/activate ]; then
+#  source /home/tau/strivaud/miniconda3/bin/activate
+#elif [ -f /usr/local/miniconda/bin/activate ]; then
+#  source /usr/local/miniconda/bin/activate
+#fi
 
 conda_env="petra-12.4"
 echo $conda_env

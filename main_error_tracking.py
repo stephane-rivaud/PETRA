@@ -416,10 +416,17 @@ if __name__ == '__main__':
                      accumulation_steps=args.accumulation_steps, accumulation_averaging=args.accumulation_averaging,
                      approximate_input=args.approximate_input)
 
-    arch_sync = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=not args.remove_ctx_input,
-                          store_param=not args.remove_ctx_param, store_vjp=args.store_vjp, quantizer=quantizer,
-                          accumulation_steps=args.accumulation_steps,
-                          accumulation_averaging=args.accumulation_averaging, approximate_input=args.approximate_input)
+    arch_sync_forward = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=False,
+                                  store_param=False, store_vjp=True, quantizer=quantizer,
+                                  accumulation_steps=args.accumulation_steps,
+                                  accumulation_averaging=args.accumulation_averaging,
+                                  approximate_input=args.approximate_input)
+
+    arch_sync_backward = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=False,
+                                   store_param=False, store_vjp=True, quantizer=quantizer,
+                                   accumulation_steps=args.accumulation_steps,
+                                   accumulation_averaging=args.accumulation_averaging,
+                                   approximate_input=args.approximate_input)
 
     # Optimization
     if args.goyal_lr_scaling:
@@ -468,7 +475,8 @@ if __name__ == '__main__':
         net = AsynchronousParallel(arch, n_devices=args.ngpus)
     else:
         net = AsynchronousSequential(arch).to(device, dtype)
-    net_sync = SynchronousSequential(arch_sync).to(device, dtype)
+    net_sync_forward = SynchronousSequential(arch_sync_forward).to(device, dtype)
+    net_sync_backward = SynchronousSequential(arch_sync_backward).to(device, dtype)
 
 
     # print number of parameters
@@ -526,7 +534,8 @@ if __name__ == '__main__':
             train_loss, train_top1, train_top5,
             grad_rel_rmse_forward, grad_norm_ratio_forward, grad_cosine_forward,
             grad_rel_rmse_backward, grad_norm_ratio_backward, grad_cosine_backward
-        ) = train(epoch, trainloader, net, net_sync, net_sync, args.synchronization_period, device, dtype, args)
+        ) = train(epoch, trainloader, net, net_sync_forward, net_sync_backward, args.synchronization_period, device,
+                  dtype, args)
 
         test_loss, test_top1, test_top5 = test(epoch, testloader, net, device, dtype, args)
         if device == 'cuda':
