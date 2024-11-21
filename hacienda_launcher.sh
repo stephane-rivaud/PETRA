@@ -19,4 +19,4 @@ batch_size=64
 wandb_project='iclr2025-async-rebuttal'
 
 # testing a single job
-bash hacienda_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
+sbatch hacienda_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
