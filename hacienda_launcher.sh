@@ -1,5 +1,7 @@
 #!/bin/bash
 
+mkdir -p slurm
+
 # ----- Parameters -----
 # job parameters
 gpu_type='none'  # 'a100', 'v100', 'v100-16g', 'v100-32g'
