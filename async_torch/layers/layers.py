@@ -382,7 +382,8 @@ class AsynchronousGenericLayer:
                 self.set_gradient(name, grad_parameters[i])
 
         grad_input = self.quantizer.quantize_grad_input_backward(grad_input)
-        # print()
+
+        self.last_id = input_id
         return input, grad_input, input_id
 
     def synchronize_forwardbackward(self):
@@ -486,5 +487,4 @@ class AsynchronousFinal(AsynchronousGenericLayer):
                 self.set_gradient(name, grad_parameters[i])
 
         grad_input = self.quantizer.quantize_grad_input_backward(grad_input)
-
         return input, grad_input, [loss, input_id, pred, label]

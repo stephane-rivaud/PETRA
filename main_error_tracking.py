@@ -32,6 +32,7 @@ def get_args():
     parser.add_argument('--model', default='vgg', type=str, help='Architecture')
     parser.add_argument('--last-bn-zero-init', action='store_true', default=False,
                         help='Initialize gamma parameter of last bn to zero in each residual block.')
+    parser.add_argument('--layer-tracking', type=int, default=5, help='Layer to track')
 
     # ----- Optimization
     parser.add_argument('--max-epoch', default=100, type=int, help='learning rate')
@@ -122,7 +123,7 @@ def get_args():
 
 
 # Training
-def train(epoch, dataloader, model, sync_period, device, dtype, opt):
+def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, sync_period, device, dtype, opt):
     """Train for one epoch on the training set"""
 
     # meters
@@ -135,9 +136,41 @@ def train(epoch, dataloader, model, sync_period, device, dtype, opt):
     progress = ProgressMeter(len(dataloader), [batch_time, data_time, losses, top1, top5],
                              prefix="Epoch: [{}]".format(epoch))
 
+    num_batches = len(dataloader)
+    depth = len(model.modules)
+    tracking_layer = opt.layer_tracking
+    tracking_frequency = 100
+    assert tracking_frequency >= 2 * (
+            depth - 1) - tracking_layer + opt.accumulation_steps - 1, 'Tracking frequency too low.'
+
     # training loop
     end = time.time()
+    input_target_copy = None
+    counter = None
+    grad_rel_rmse_forward = AverageMeter('Rel RMSE', ':.4e')
+    grad_norm_ratio_forward = AverageMeter('Norm Ratio', ':.4e')
+    grad_cosine_forward = AverageMeter('Cosine', ':.4e')
+    progress_grad_forward = ProgressMeter(len(dataloader), [grad_rel_rmse_forward, grad_norm_ratio_forward,
+                                                            grad_cosine_forward],
+                                          prefix="Epoch: [{}]".format(epoch))
+    grad_rel_rmse_backward = AverageMeter('Rel RMSE', ':.4e')
+    grad_norm_ratio_backward = AverageMeter('Norm Ratio', ':.4e')
+    grad_cosine_backward = AverageMeter('Cosine', ':.4e')
+    progress_grad_backward = ProgressMeter(len(dataloader), [grad_rel_rmse_backward, grad_norm_ratio_backward,
+                                                             grad_cosine_backward],
+                                           prefix="Epoch: [{}]".format(epoch))
+
     for batch_idx, (inputs, targets) in enumerate(dataloader):
+        # initialize tracking
+        if batch_idx % tracking_frequency == 0:
+            input_target_copy = []
+            counter = 0
+
+        # store input and target
+        if batch_idx % tracking_frequency < opt.accumulation_steps:
+            input_target_copy.append((inputs.clone(), targets.clone(), batch_idx))
+
+        # push data to device
         inputs, targets = inputs.to(device, dtype), targets.to(device)
         data_time.update(time.time() - end)
 
@@ -149,7 +182,7 @@ def train(epoch, dataloader, model, sync_period, device, dtype, opt):
 
         # original goyal scheduler
         if opt.scheduler == 'goyal_original':
-            k_step = len(dataloader) * epoch + batch_idx
+            k_step = num_batches * epoch + batch_idx
             n_step_tot = len(dataloader) * opt.max_epoch
             n_epoch_if_1_worker = opt.max_epoch
             lr = opt.lr
@@ -163,7 +196,7 @@ def train(epoch, dataloader, model, sync_period, device, dtype, opt):
 
         # costumized goyal scheduler
         if opt.scheduler == 'goyal':
-            k_step = len(dataloader) * epoch + batch_idx
+            k_step = num_batches * epoch + batch_idx
             n_step_tot = len(dataloader) * opt.max_epoch
             n_epoch = opt.max_epoch
             milestones = opt.lr_decay_milestones
@@ -175,7 +208,90 @@ def train(epoch, dataloader, model, sync_period, device, dtype, opt):
 
         # forward backward and update
         with torch.no_grad():
-            L, output, output_y = model.forward_and_update(inputs, targets, batch_idx)
+            L, output, output_y = model.forward_and_update(inputs, targets, batch_idx, update=False)
+            if counter is not None:
+                # store forward model state
+                if counter == opt.accumulation_steps - 1:
+                    model_sync_forward.load_state_list(model.state_list())
+
+                if counter == 2 * (depth - 1) - tracking_layer + opt.accumulation_steps - 1:
+                    # synchronize sync and async model
+                    model_sync_backward.load_state_list(model.state_list())
+
+                    # forward and backward for tracking layer
+                    for input_copy, target_copy, batch_idx_copy in input_target_copy:
+                        input_copy, target_copy = input_copy.to(device, dtype), target_copy.to(device)
+                        model_sync_forward.forward_and_update(input_copy, target_copy, batch_idx_copy, update=False)
+                        model_sync_backward.forward_and_update(input_copy, target_copy, batch_idx_copy, update=False)
+
+                    # compute gradient differences
+                    rel_rmse = {'forward': 0, 'backward': 0}
+                    norm_ratio = {'forward': 0, 'backward': 0}
+                    cosine = {'forward': 0, 'backward': 0}
+                    count = 0
+                    for param in model.modules[tracking_layer].list_parameters:
+                        # some parameters may be empty, need to skip them
+                        if model.modules[tracking_layer].get_parameter(param).numel() == 0:
+                            continue
+                        count += 1
+
+                        # get gradients
+                        grad_sync_forward = model_sync_forward.modules[tracking_layer].get_gradient(
+                            param) / opt.accumulation_steps
+                        grad_sync_backward = model_sync_backward.modules[tracking_layer].get_gradient(
+                            param) / opt.accumulation_steps
+                        grad_async = model.modules[tracking_layer].get_gradient(param) / opt.accumulation_steps
+                        grad_sync_forward_norm = grad_sync_forward.norm()
+                        grad_sync_backward_norm = grad_sync_backward.norm()
+                        grad_async_norm = grad_async.norm()
+
+                        # compute metrics
+                        rel_rmse['forward'] += torch.nn.functional.mse_loss(
+                            grad_async.flatten(),
+                            grad_sync_forward.flatten()
+                        ).sqrt() / grad_sync_forward_norm
+
+                        rel_rmse['backward'] += torch.nn.functional.mse_loss(
+                            grad_async.flatten(),
+                            grad_sync_backward.flatten()
+                        ).sqrt() / grad_sync_backward_norm
+
+                        norm_ratio['forward'] += grad_async_norm / grad_sync_forward_norm
+                        norm_ratio['backward'] += grad_async_norm / grad_sync_backward_norm
+
+                        cosine['forward'] += torch.nn.functional.cosine_similarity(
+                            grad_async.flatten(),
+                            grad_sync_forward.flatten(),
+                            dim=0)
+
+                        cosine['backward'] += torch.nn.functional.cosine_similarity(
+                            grad_async.flatten(),
+                            grad_sync_backward.flatten(),
+                            dim=0)
+
+                    # average over parameters
+                    rel_rmse['forward'] /= count
+                    rel_rmse['backward'] /= count
+                    norm_ratio['forward'] /= count
+                    norm_ratio['backward'] /= count
+                    cosine['forward'] /= count
+                    cosine['backward'] /= count
+
+                    # update meters
+                    grad_rel_rmse_forward.update(rel_rmse['forward'].item())
+                    grad_norm_ratio_forward.update(norm_ratio['forward'].item())
+                    grad_cosine_forward.update(cosine['forward'].item())
+
+                    grad_rel_rmse_backward.update(rel_rmse['backward'].item())
+                    grad_norm_ratio_backward.update(norm_ratio['backward'].item())
+                    grad_cosine_backward.update(cosine['backward'].item())
+
+                    # reset counter
+                    counter = None
+                    input_target_copy = None
+                else:
+                    counter += 1
+            model.update()
 
         # synchronize forward and backward weights
         if batch_idx % sync_period == 0:
@@ -193,8 +309,10 @@ def train(epoch, dataloader, model, sync_period, device, dtype, opt):
         # display progress
         if batch_idx % opt.print_freq == 0:
             progress.display(batch_idx + 1)
+            progress_grad_forward.display(batch_idx + 1)
+            progress_grad_backward.display(batch_idx + 1)
 
-    return losses.avg, top1.avg, top5.avg
+    return losses.avg, top1.avg, top5.avg, grad_rel_rmse_forward.avg, grad_norm_ratio_forward.avg, grad_cosine_forward.avg, grad_rel_rmse_backward.avg, grad_norm_ratio_backward.avg, grad_cosine_backward.avg
 
 
 def test(epoch, dataloader, model, device, dtype, opt):
@@ -298,6 +416,11 @@ if __name__ == '__main__':
                      accumulation_steps=args.accumulation_steps, accumulation_averaging=args.accumulation_averaging,
                      approximate_input=args.approximate_input)
 
+    arch_sync = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=not args.remove_ctx_input,
+                          store_param=not args.remove_ctx_param, store_vjp=args.store_vjp, quantizer=quantizer,
+                          accumulation_steps=args.accumulation_steps,
+                          accumulation_averaging=args.accumulation_averaging, approximate_input=args.approximate_input)
+
     # Optimization
     if args.goyal_lr_scaling:
         args.lr = args.lr * args.accumulation_steps * args.batch_size / 256
@@ -345,8 +468,10 @@ if __name__ == '__main__':
         net = AsynchronousParallel(arch, n_devices=args.ngpus)
     else:
         net = AsynchronousSequential(arch).to(device, dtype)
+    net_sync = SynchronousSequential(arch_sync).to(device, dtype)
 
 
+    # print number of parameters
     def count_parameters(model):
         num_param = 0
         for module in model.modules:
@@ -397,8 +522,12 @@ if __name__ == '__main__':
             net.set_lr(lr)
 
         # train and test
-        train_loss, train_top1, train_top5 = train(epoch, trainloader, net, args.synchronization_period, device, dtype,
-                                                   args)
+        (
+            train_loss, train_top1, train_top5,
+            grad_rel_rmse_forward, grad_norm_ratio_forward, grad_cosine_forward,
+            grad_rel_rmse_backward, grad_norm_ratio_backward, grad_cosine_backward
+        ) = train(epoch, trainloader, net, net_sync, net_sync, args.synchronization_period, device, dtype, args)
+
         test_loss, test_top1, test_top5 = test(epoch, testloader, net, device, dtype, args)
         if device == 'cuda':
             print(f'Maximum memory allocated {torch.cuda.max_memory_allocated(device=None)} bits')
@@ -421,16 +550,28 @@ if __name__ == '__main__':
 
         # log
         if args.use_wandb:
+            # training metrics
             log_dict = {
                 'loss/train': train_loss, 'loss/test': test_loss,
                 'top1/train': train_top1, 'top1/test': test_top1,
                 'top5/train': train_top5, 'top5/test': test_top5,
                 'learning_rate': net.modules[0].optimizers[0].lr
             }
+
+            # gradient metrics
+            log_dict.update({
+                'grad_rel_rmse_forward': grad_rel_rmse_forward, 'grad_norm_ratio_forward': grad_norm_ratio_forward,
+                'grad_cosine_forward': grad_cosine_forward,
+                'grad_rel_rmse_backward': grad_rel_rmse_backward, 'grad_norm_ratio_backward': grad_norm_ratio_backward,
+                'grad_cosine_backward': grad_cosine_backward
+            })
+
+            # evaluation without compression
             if args.quantizer != 'QuantizSimple':
                 log_dict.update({'loss/test_no_compression': test_loss_no_comp,
                                  'top1/test_no_compression': test_top1_no_comp,
                                  'top5/test_no_compression': test_top5_no_comp})
+
             wandb.log(log_dict, step=epoch)
             wandb.summary.update({'best_epoch': best_epoch, 'best_acc': best_acc})
 

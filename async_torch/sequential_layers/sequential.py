@@ -58,12 +58,16 @@ class Sequential:
         loss = modules[depth - 1].loss(x, targets) if targets is not None else None
         return loss, x
 
+    def update(self, set_grad_to_none=True):
+        for module in self.modules:
+            module.update(set_grad_to_none=set_grad_to_none)
+
 
 class SynchronousSequential(Sequential):
     def __init__(self, modules):
         super(SynchronousSequential, self).__init__(modules)
 
-    def forward_and_update(self, x, y, idx, set_grad_to_none=True):
+    def forward_and_update(self, x, y, idx, set_grad_to_none=True, update=True):
         depth = len(self.modules)
         modules = self.modules
         for i in range(depth - 1):
@@ -74,9 +78,8 @@ class SynchronousSequential(Sequential):
         for i in range(depth - 2, -1, -1):
             input_from_backward, grad_x, _ = modules[i].backward(input_from_backward, grad_x, idx)
 
-        # update
-        for i in range(depth):
-            modules[i].update(set_grad_to_none=set_grad_to_none)
+        if update:
+            self.update(set_grad_to_none=set_grad_to_none)
         return L, x, y
 
 
@@ -90,7 +93,7 @@ class AsynchronousSequential(Sequential):
         self.label_output = {}
         self.grad_input_idx = {}
 
-    def forward_and_update(self, x, y, idx, set_grad_to_none=True):
+    def forward_and_update(self, x, y, idx, set_grad_to_none=True, update=True):
         depth = len(self.modules)
         modules = self.modules
 
@@ -159,8 +162,8 @@ class AsynchronousSequential(Sequential):
                     del input_from_backward[i], grad_input[i], grad_input_idx[i]
 
         # update
-        for i in range(depth):
-            modules[i].update(set_grad_to_none=set_grad_to_none)
+        if update:
+            self.update(set_grad_to_none=set_grad_to_none)
 
         # If no output has been computed, handle it with a None.        
         if depth - 1 in output:
