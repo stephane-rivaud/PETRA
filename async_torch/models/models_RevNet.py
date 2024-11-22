@@ -480,6 +480,44 @@ class Bottleneck(AsynchronousGenericLayer):
         return x, tilde_x
 
 
+def make_layers_revnet_fixed_size(dataset, n_layers, nclass=10, last_bn_zero_init=False,
+                                  store_input=True, store_param=True, store_vjp=False,
+                                  quantizer=QuantizSimple,
+                                  accumulation_steps=1, accumulation_averaging=False, approximate_input=False):
+    layers = []
+    in_channels = 3
+    channels = 64
+    if dataset == 'imagenet':
+        kernel_size, stride, padding, max_pool = 7, 2, 3, True
+    else:
+        kernel_size, stride, padding, max_pool = 3, 1, 1, False
+
+    # First layer
+    layers += [ConvBNReLUMax(in_channels, channels, kernel_size=kernel_size, padding=padding, stride=stride,
+                             max_pool=max_pool, first_layer=True, store_input=True, store_param=store_param,
+                             store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
+                             accumulation_averaging=accumulation_averaging)]
+
+    # Residual blocks
+    for i in range(n_layers):
+        layers += [BasicBlock(channels, channels, padding=1, store_input=store_input,
+                              approximate_input=approximate_input, store_param=store_param,
+                              store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
+                              accumulation_averaging=accumulation_averaging)]
+
+    if last_bn_zero_init:
+        for layer in layers[1:]:
+            name = 'weight_bn_2'
+            setattr(layer, name + '_forward', torch.zeros_like(getattr(layer, name + '_forward')))
+            setattr(layer, name + '_backward', torch.zeros_like(getattr(layer, name + '_backward')))
+
+    # Need avg pooling
+    layers += [
+        AVGFlattenFullyConnectedCE(channels, nclass, quantizer=quantizer, accumulation_steps=accumulation_steps,
+                                   accumulation_averaging=accumulation_averaging)]
+    return layers
+
+
 def make_layers_revnet18(dataset, nclass=10, last_bn_zero_init=False, store_input=True, store_param=True,
                          store_vjp=False, quantizer=QuantizSimple, accumulation_steps=1,
                          accumulation_averaging=False, approximate_input=False):
@@ -749,7 +787,8 @@ def make_layers_revnet50_variant(dataset, nclass=10, last_bn_zero_init=False, st
                                          accumulation_averaging=accumulation_averaging)]
         else:
             layers += [
-                BottleneckVariant(n_in, n_h, n_out, padding=1, store_input=store_input, approximate_input=approximate_input,
+                BottleneckVariant(n_in, n_h, n_out, padding=1, store_input=store_input,
+                                  approximate_input=approximate_input,
                                   store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
                                   accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
 
@@ -871,7 +910,8 @@ def make_layers_revnet101_variant(dataset, nclass=10, last_bn_zero_init=False, s
                                          accumulation_averaging=accumulation_averaging)]
         else:
             layers += [
-                BottleneckVariant(n_in, n_h, n_out, padding=1, store_input=store_input, approximate_input=approximate_input,
+                BottleneckVariant(n_in, n_h, n_out, padding=1, store_input=store_input,
+                                  approximate_input=approximate_input,
                                   store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
                                   accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
 
@@ -894,7 +934,8 @@ def compute_memory(model, layers, input_sizes, batch_size, accumulation_steps, s
         for name in layer.list_parameters:
             num_param += layer.get_parameter(name).numel()
     print('-' * 50)
-    print(f'Model: {model} - {num_param:,} params | Store ctx: {store_param} | Accumulation steps: {accumulation_steps}')
+    print(
+        f'Model: {model} - {num_param:,} params | Store ctx: {store_param} | Accumulation steps: {accumulation_steps}')
     print('-' * 50)
     depth = len(layers)
     staleness = [2 * (depth - j) for j in range(1, depth + 1)]
@@ -951,7 +992,8 @@ def compute_memory(model, layers, input_sizes, batch_size, accumulation_steps, s
     total_buffer *= 32 / 10 ** 9 / 8
     total_memory *= 32 / 10 ** 9 / 8
     working_memory *= 32 / 10 ** 9 / 8
-    print(f"Model: {model_memory: .2f}GB -- Input: {total_input_buffer: .2f}GB -- Param: {total_param_buffer: .2f}GB -- Buffer: {total_buffer: .2f}GB -- Total: {total_memory: .2f}GB -- Needed: {working_memory: .2f}GB")
+    print(
+        f"Model: {model_memory: .2f}GB -- Input: {total_input_buffer: .2f}GB -- Param: {total_param_buffer: .2f}GB -- Buffer: {total_buffer: .2f}GB -- Total: {total_memory: .2f}GB -- Needed: {working_memory: .2f}GB")
     return model_memory, total_input_buffer, total_param_buffer, total_buffer, total_memory
 
 
@@ -976,7 +1018,7 @@ if __name__ == '__main__':
     model_memory, total_input_buffer, total_param_buffer, total_buffer, total_memory = (
         memory_function(dataset, n_class, batch_size=batch_size, store_input=store_input, store_param=store_param,
                         accumulation_steps=accumulation_steps)
-        )
+    )
     print()
 
     store_input = True
@@ -988,13 +1030,13 @@ if __name__ == '__main__':
     new_model, new_input_buffer, new_param_buffer, new_buffer, new_memory = (
         memory_function(dataset, n_class, batch_size=batch_size, store_input=store_input, store_param=store_param,
                         accumulation_steps=accumulation_steps)
-        )
+    )
     input_savings = 1 - new_input_buffer / total_input_buffer
     param_savings = 1 - new_param_buffer / total_param_buffer
     buffer_savings = 1 - new_buffer / total_buffer
     total_savings = 1 - new_memory / total_memory
     print(
-        f"Savings: Input {input_savings*100: .2f}% -- Param {param_savings*100: .2f}% -- Buffer {buffer_savings*100: .2f}% -- Total {total_savings*100: .2f}%")
+        f"Savings: Input {input_savings * 100: .2f}% -- Param {param_savings * 100: .2f}% -- Buffer {buffer_savings * 100: .2f}% -- Total {total_savings * 100: .2f}%")
 
     store_input = False
     store_param = True
@@ -1005,13 +1047,13 @@ if __name__ == '__main__':
     new_model, new_input_buffer, new_param_buffer, new_buffer, new_memory = (
         memory_function(dataset, n_class, batch_size=batch_size, store_input=store_input, store_param=store_param,
                         accumulation_steps=accumulation_steps)
-        )
+    )
     input_savings = 1 - new_input_buffer / total_input_buffer
     param_savings = 1 - new_param_buffer / total_param_buffer
     buffer_savings = 1 - new_buffer / total_buffer
     total_savings = 1 - new_memory / total_memory
     print(
-        f"Savings: Input {input_savings*100: .2f}% -- Param {param_savings*100: .2f}% -- Buffer {buffer_savings*100: .2f}% -- Total {total_savings*100: .2f}%")
+        f"Savings: Input {input_savings * 100: .2f}% -- Param {param_savings * 100: .2f}% -- Buffer {buffer_savings * 100: .2f}% -- Total {total_savings * 100: .2f}%")
 
     store_input = False
     store_param = False
@@ -1022,10 +1064,10 @@ if __name__ == '__main__':
     new_model, new_input_buffer, new_param_buffer, new_buffer, new_memory = (
         memory_function(dataset, n_class, batch_size=batch_size, store_input=store_input, store_param=store_param,
                         accumulation_steps=accumulation_steps)
-        )
+    )
     input_savings = 1 - new_input_buffer / total_input_buffer
     param_savings = 1 - new_param_buffer / total_param_buffer
     buffer_savings = 1 - new_buffer / total_buffer
     total_savings = 1 - new_memory / total_memory
     print(
-        f"Savings: Input {input_savings*100: .2f}% -- Param {param_savings*100: .2f}% -- Buffer {buffer_savings*100: .2f}% -- Total {total_savings*100: .2f}%")
+        f"Savings: Input {input_savings * 100: .2f}% -- Param {param_savings * 100: .2f}% -- Buffer {buffer_savings * 100: .2f}% -- Total {total_savings * 100: .2f}%")

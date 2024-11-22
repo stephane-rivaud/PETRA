@@ -78,6 +78,7 @@ def get_model(dataset, model, last_bn_zero_init, store_input=True, store_param=T
                                              quantizer=quantizer, accumulation_steps=accumulation_steps,
                                              accumulation_averaging=accumulation_averaging,
                                              approximate_input=approximate_input)
+
     else:
         raise ValueError(f'Wrong architecture ({model}).')
     return arch
