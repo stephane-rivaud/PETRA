@@ -21,4 +21,12 @@ batch_size=64
 wandb_project='iclr2025-async-rebuttal'
 
 # testing a single job
-sbatch hacienda_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
+for model in 'revnet18' 'revnet34'; do
+  for dataset in 'cifar10' 'cifar100'; do
+    for accumulation_steps in 1 4 16; do
+      bash hacienda_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
+    done
+  done
+done
+
+# sbatch hacienda_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
