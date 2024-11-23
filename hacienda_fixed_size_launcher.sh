@@ -20,8 +20,8 @@ wandb_project='iclr2025-async-rebuttal-depth'
 
 # testing a single job
 for dataset in 'cifar10' 'cifar100'; do
-  for n_layers in 20 30 40 50; do
-    for accumulation_steps in 1 16 32 64; do
+  for accumulation_steps in 1 16 32 64; do
+    for n_layers in 20 30 40 50; do
       synchronous='true'
       sbatch hacienda_fixed_size_script.sh $gpu_type $output_dir $dataset $n_layers $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
 
