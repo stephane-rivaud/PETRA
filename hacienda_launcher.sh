@@ -5,7 +5,7 @@ mkdir -p slurm
 # ----- Parameters -----
 # job parameters
 gpu_type='none'  # 'a100', 'v100', 'v100-16g', 'v100-32g'
-output_dir='logs/iclr2025-async-rebuttal-true-delay'  # output directory for logs and checkpoints
+output_dir='logs/iclr2025-async-rebuttal'  # output directory for logs and checkpoints
 
 # command parameters
 dataset='cifar10'
@@ -18,7 +18,7 @@ approximate_input='false'
 accumulation_steps=1
 lr=0.1
 batch_size=64
-wandb_project='iclr2025-async-rebuttal'
+wandb_project='iclr2025-async-rebuttal-true-delay'
 
 # testing a single job
 for dataset in 'cifar10' 'cifar100'; do
