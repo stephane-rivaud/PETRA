@@ -486,7 +486,7 @@ def make_layers_revnet_fixed_size(dataset, n_layers, nclass=10, last_bn_zero_ini
                                   accumulation_steps=1, accumulation_averaging=False, approximate_input=False):
     layers = []
     in_channels = 3
-    channels = 64
+    channels = 256
     if dataset == 'imagenet':
         kernel_size, stride, padding, max_pool = 7, 2, 3, True
     else:

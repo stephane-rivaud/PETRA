@@ -173,7 +173,7 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
                                    cosine_meters[layer_id][key]
                                ]
                                , prefix=f'Layer {layer_id} {key} metrics')
-         for key in ['forward', 'backward', 'delay']
+            for key in ['forward', 'backward', 'delay']
         }
         for layer_id in range(depth)
     ]
@@ -228,7 +228,7 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
         # save forward model state
         if tracking and 0 <= counter - (opt.accumulation_steps - 1) < depth:
             layer_id = counter - (opt.accumulation_steps - 1)
-            forward_weights[layer_id] = model.state_list()
+            forward_weights[layer_id] = model.modules[layer_id].state_list()
 
         # save backward model state
         if tracking and depth - 1 <= counter - (opt.accumulation_steps - 1) <= 2 * (depth - 1):
@@ -250,7 +250,8 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
                     layer_id = 2 * (depth - 1) - (counter - (opt.accumulation_steps - 1))
 
                     # load forward and backward weights
-                    model_sync_forward.load_state_list(forward_weights[layer_id])
+                    for id in range(depth):
+                        model_sync_forward.modules[id].load_state_list(forward_weights[id])
                     model_sync_backward.load_state_list(backward_weights[layer_id])
 
                     # forward and backward for tracking layer
