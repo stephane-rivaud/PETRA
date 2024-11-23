@@ -9,6 +9,11 @@
 #SBATCH --output=slurm/%x-%j.out
 #SBATCH --error=slurm/%x-%j.err
 
+conda_env="petra-12.4"
+echo $conda_env
+source activate $conda_env
+conda info --envs
+
 # ----- Parameters -----
 # job parameters
 gpu_type=$1     # 'a100', 'v100', 'v100-16g', 'v100-32g'
