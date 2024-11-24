@@ -32,7 +32,7 @@ class AsynchronousGenericLayer:
         self.accumulation_averaging = accumulation_averaging
         self.approximate_input = approximate_input
 
-        self.count = 0
+        self.grad_counter = 0
         self.synchronize_buffers = False
         self.optimizers = []
 
@@ -147,6 +147,9 @@ class AsynchronousGenericLayer:
 
     def set_grad_to_none(self, name=None):
         if name is None:
+            # update gradient counter first
+            self.grad_counter = 0
+            # set all gradients to None
             for name in self.list_parameters:
                 self.set_gradient(name, None)
         else:
@@ -381,6 +384,9 @@ class AsynchronousGenericLayer:
             else:
                 self.set_gradient(name, grad_parameters[i])
 
+        # update gradient counter
+        self.grad_counter = self.grad_counter + 1
+
         grad_input = self.quantizer.quantize_grad_input_backward(grad_input)
 
         self.last_id = input_id
@@ -406,8 +412,8 @@ class AsynchronousGenericLayer:
         return output, label, input_id
 
     def update(self, set_grad_to_none=True):
-        self.count = (self.count + 1) % self.accumulation_steps
-        if self.count == 0:
+        # self.grad_counter = (self.grad_counter + 1) % self.accumulation_steps
+        if self.grad_counter % self.accumulation_steps == 0:
             for optimizer in self.optimizers:
                 list_param_backward = []
                 list_grad_backward = []
@@ -425,6 +431,9 @@ class AsynchronousGenericLayer:
                     # Since we updated, we remove accumulation.
                     for name in optimizer.list_parameters:
                         self.set_grad_to_none(name)
+
+            # reset gradient counter
+            self.grad_counter = 0
 
 
 class AsynchronousFinal(AsynchronousGenericLayer):
@@ -485,6 +494,9 @@ class AsynchronousFinal(AsynchronousGenericLayer):
                 self.set_gradient(name, grad + grad_parameters[i])
             else:
                 self.set_gradient(name, grad_parameters[i])
+
+        # update gradient counter
+        self.grad_counter = self.grad_counter + 1
 
         grad_input = self.quantizer.quantize_grad_input_backward(grad_input)
         return input, grad_input, [loss, input_id, pred, label]

@@ -62,6 +62,10 @@ class Sequential:
         for module in self.modules:
             module.update(set_grad_to_none=set_grad_to_none)
 
+    def set_grad_to_none(self):
+        for module in self.modules:
+            module.set_grad_to_none()
+
 
 class SynchronousSequential(Sequential):
     def __init__(self, modules):
@@ -139,13 +143,9 @@ class AsynchronousSequential(Sequential):
         for i in range(depth):
             if i in input:
                 if i < depth - 1:
-                    # print('module ' + str(i) + ' forward')
-                    # if hasattr(modules[i], 'downsample') and modules[i].downsample:
-                        # print('module with downsampling')
                     output[i], label_output[i], output_idx[i] \
                         = modules[i].forward_with_decorations(input[i], label_input[i], input_idx[i])
                 else:
-                    # print('module ' + str(i) + ' forward and backward')
                     input_from_backward[depth - 1], grad_input[depth - 1], meta \
                         = modules[i].forward_and_backward(input[i], label_input[i], input_idx[i])
                     L, grad_input_idx[depth - 1], output[depth - 1], label_output[depth - 1] = meta
@@ -153,9 +153,6 @@ class AsynchronousSequential(Sequential):
         # Apply each "asynchronous" block on the grad_output, backward mode -- except the last layer
         for i in range(depth - 1):
             if i in grad_output:
-                # print('module ' + str(i) + ' backward')
-                # if hasattr(modules[i], 'downsample') and modules[i].downsample:
-                        # print('module with downsampling')
                 input_from_backward[i], grad_input[i], grad_input_idx[i] \
                     = modules[i].backward(output_for_backward[i], grad_output[i], grad_output_idx[i])
                 if i == 0:
@@ -261,7 +258,7 @@ class AsynchronousParallel(Sequential):
         for stream in self.streams:
             stream.synchronize()
 
-            # update
+        # update
         for i in range(depth):
             modules[i].update()
 

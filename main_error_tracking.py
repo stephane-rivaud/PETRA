@@ -151,6 +151,7 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
     forward_weights = None
     backward_weights = None
 
+    # metrics trackers
     rel_mse_meters = [
         {key: AverageMeter('Rel MSE', ':.4e') for key in ['forward', 'backward', 'delay']}
         for _ in range(depth)
@@ -241,108 +242,106 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
         # forward backward and update
         with torch.no_grad():
             # async gradient computation
-            L, output, output_y = model.forward_and_update(inputs, targets, batch_idx, update=False)
+            L, output, output_y = model.forward_and_update(inputs, targets, batch_idx, update=False, set_grad_to_none=False)
 
-            if tracking:
-                if depth - 1 <= counter - (opt.accumulation_steps - 1) <= 2 * (depth - 1):
-                    # compute layer id
-                    layer_id = 2 * (depth - 1) - (counter - (opt.accumulation_steps - 1))
+        if tracking:
+            if counter - (opt.accumulation_steps - 1) == depth - 1:
+                # load forward weights
+                for id in range(depth):
+                    model_sync_forward.modules[id].load_state_list(forward_weights[id])
+                # compute gradients (forward)
+                for copy_id, (input_copy, target_copy, batch_idx_copy) in enumerate(input_target_copy):
+                    input_copy, target_copy = input_copy.to(device, dtype), target_copy.to(device)
+                    model_sync_forward.forward_and_update(input_copy, target_copy, batch_idx_copy, update=False)
 
-                    # load forward and backward weights
-                    for id in range(depth):
-                        model_sync_forward.modules[id].load_state_list(forward_weights[id])
-                    model_sync_backward.load_state_list(backward_weights[layer_id])
+            if depth - 1 <= counter - (opt.accumulation_steps - 1) <= 2 * (depth - 1):
+                # compute layer id
+                layer_id = 2 * (depth - 1) - (counter - (opt.accumulation_steps - 1))
 
-                    # forward and backward for tracking layer
-                    for input_copy, target_copy, batch_idx_copy in input_target_copy:
-                        input_copy, target_copy = input_copy.to(device, dtype), target_copy.to(device)
-                        model_sync_forward.forward_and_update(input_copy, target_copy, batch_idx_copy, update=False)
-                        model_sync_backward.forward_and_update(input_copy, target_copy, batch_idx_copy, update=False)
+                # load backward weights
+                model_sync_backward.load_state_list(backward_weights[layer_id])
 
-                    # compute gradient differences
-                    rel_rmse = {'forward': 0, 'backward': 0, 'delay': 0}
-                    norm_ratio = {'forward': 0, 'backward': 0, 'delay': 0}
-                    cosine = {'forward': 0, 'backward': 0, 'delay': 0}
-                    count = 0
+                # forward and backward for tracking layer
+                for copy_id, (input_copy, target_copy, batch_idx_copy) in enumerate(input_target_copy):
+                    input_copy, target_copy = input_copy.to(device, dtype), target_copy.to(device)
+                    model_sync_backward.forward_and_update(input_copy, target_copy, batch_idx_copy, update=False)
 
-                    for param in model.modules[layer_id].list_parameters:
-                        # some parameters may be empty, need to skip them
-                        if model.modules[layer_id].get_parameter(param).numel() == 0:
-                            continue
-                        else:
-                            count += 1
+                # compute gradient differences
+                rel_rmse = {'forward': 0, 'backward': 0, 'delay': 0}
+                norm_ratio = {'forward': 0, 'backward': 0, 'delay': 0}
+                cosine = {'forward': 0, 'backward': 0, 'delay': 0}
+                count = 0
 
-                        # get gradients
-                        grad_forward = model_sync_forward.modules[layer_id].get_gradient(param).clone()
-                        grad_backward = model_sync_backward.modules[layer_id].get_gradient(param).clone()
-                        grad_async = model.modules[layer_id].get_gradient(param).clone()
+                for param in model.modules[layer_id].list_parameters:
+                    # some parameters may be empty, need to skip them
+                    if model.modules[layer_id].get_parameter(param).numel() == 0:
+                        continue
+                    else:
+                        count += 1
 
-                        # normalize gradients
-                        grad_forward /= opt.accumulation_steps
-                        grad_backward /= opt.accumulation_steps
-                        grad_async /= opt.accumulation_steps
+                    # get gradients
+                    grad_forward = model_sync_forward.modules[layer_id].get_gradient(param).clone()
+                    grad_backward = model_sync_backward.modules[layer_id].get_gradient(param).clone()
+                    grad_async = model.modules[layer_id].get_gradient(param).clone()
 
-                        # compute metrics
-                        grad_sync_norm_forward = grad_forward.norm()
-                        grad_sync_norm_backward = grad_backward.norm()
-                        grad_async_norm = grad_async.norm()
+                    # normalize gradients
+                    grad_forward /= opt.accumulation_steps
+                    grad_backward /= opt.accumulation_steps
+                    grad_async /= opt.accumulation_steps
 
-                        rel_rmse['forward'] += torch.nn.functional.mse_loss(
-                            grad_async.flatten(),
-                            grad_forward.flatten()
-                        ).sqrt() / grad_sync_norm_forward
+                    # compute metrics
+                    grad_sync_norm_forward = grad_forward.norm()
+                    grad_sync_norm_backward = grad_backward.norm()
+                    grad_async_norm = grad_async.norm()
 
-                        rel_rmse['backward'] += torch.nn.functional.mse_loss(
-                            grad_async.flatten(),
-                            grad_backward.flatten()
-                        ).sqrt() / grad_sync_norm_backward
+                    rel_rmse['forward'] += (grad_async - grad_forward).norm() / grad_sync_norm_forward
+                    rel_rmse['backward'] += (grad_async - grad_backward).norm() / grad_sync_norm_backward
+                    rel_rmse['delay'] += (grad_forward - grad_backward).norm() / grad_sync_norm_backward
 
-                        rel_rmse['delay'] += torch.nn.functional.mse_loss(
-                            grad_forward.flatten(),
-                            grad_backward.flatten()
-                        ).sqrt() / grad_sync_norm_backward
+                    norm_ratio['forward'] += grad_async_norm / grad_sync_norm_forward
+                    norm_ratio['backward'] += grad_async_norm / grad_sync_norm_backward
+                    norm_ratio['delay'] += grad_sync_norm_forward / grad_sync_norm_backward
 
-                        norm_ratio['forward'] += grad_async_norm / grad_sync_norm_forward
-                        norm_ratio['backward'] += grad_async_norm / grad_sync_norm_backward
-                        norm_ratio['delay'] += grad_sync_norm_forward / grad_sync_norm_backward
+                    cosine['forward'] += torch.nn.functional.cosine_similarity(
+                        grad_async.flatten(),
+                        grad_forward.flatten(),
+                        dim=0)
 
-                        cosine['forward'] += torch.nn.functional.cosine_similarity(
-                            grad_async.flatten(),
-                            grad_forward.flatten(),
-                            dim=0)
+                    cosine['backward'] += torch.nn.functional.cosine_similarity(
+                        grad_async.flatten(),
+                        grad_backward.flatten(),
+                        dim=0)
 
-                        cosine['backward'] += torch.nn.functional.cosine_similarity(
-                            grad_async.flatten(),
-                            grad_backward.flatten(),
-                            dim=0)
+                    cosine['delay'] += torch.nn.functional.cosine_similarity(
+                        grad_forward.flatten(),
+                        grad_backward.flatten(),
+                        dim=0)
 
-                        cosine['delay'] += torch.nn.functional.cosine_similarity(
-                            grad_forward.flatten(),
-                            grad_backward.flatten(),
-                            dim=0)
-
-                    # average over parameters
-                    for metric in [rel_rmse, norm_ratio, cosine]:
-                        for key in ['forward', 'backward', 'delay']:
-                            metric[key] /= count
-
-                    # update meters
+                # average over parameters
+                for metric in [rel_rmse, norm_ratio, cosine]:
                     for key in ['forward', 'backward', 'delay']:
-                        rel_mse_meters[layer_id][key].update(rel_rmse[key].item())
-                        norm_ratio_meters[layer_id][key].update(norm_ratio[key].item())
-                        cosine_meters[layer_id][key].update(cosine[key].item())
+                        metric[key] /= count
 
-                if counter - (opt.accumulation_steps - 1) == 2 * (depth - 1):
-                    # reset tracking variables
-                    tracking = False
-                    counter = None
-                    input_target_copy = None
-                    forward_weights = None
-                    backward_weights = None
-                else:
-                    counter += 1
+                # update meters
+                for key in ['forward', 'backward', 'delay']:
+                    rel_mse_meters[layer_id][key].update(rel_rmse[key].item())
+                    norm_ratio_meters[layer_id][key].update(norm_ratio[key].item())
+                    cosine_meters[layer_id][key].update(cosine[key].item())
 
-            model.update()
+            if counter - (opt.accumulation_steps - 1) == 2 * (depth - 1):
+                # reset tracking variables
+                tracking = False
+                counter = None
+                input_target_copy = None
+                forward_weights = None
+                backward_weights = None
+                model_sync_forward.set_grad_to_none()
+            else:
+                counter += 1
+
+        # update model
+        model.update(set_grad_to_none=True)
+        model_sync_backward.set_grad_to_none()
 
         # synchronize forward and backward weights
         if batch_idx % sync_period == 0:
@@ -361,7 +360,7 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
         if batch_idx % opt.print_freq == 0:
             progress.display(batch_idx + 1)
             for i, progress_layer in enumerate(progress_meters):
-                if i % 4 == 0:
+                if i % 1 == 0:
                     for key in progress_layer:
                         progress_layer[key].display(batch_idx + 1)
 
@@ -475,17 +474,17 @@ if __name__ == '__main__':
                      accumulation_steps=args.accumulation_steps, accumulation_averaging=args.accumulation_averaging,
                      approximate_input=args.approximate_input)
 
-    arch_sync = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=False,
-                          store_param=False, store_vjp=True, quantizer=quantizer,
-                          accumulation_steps=args.accumulation_steps,
-                          accumulation_averaging=args.accumulation_averaging,
-                          approximate_input=args.approximate_input)
-
-    arch_sync_delayed = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=False,
+    arch_sync_forward = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=False,
                                   store_param=False, store_vjp=True, quantizer=quantizer,
                                   accumulation_steps=args.accumulation_steps,
                                   accumulation_averaging=args.accumulation_averaging,
                                   approximate_input=args.approximate_input)
+
+    arch_sync_backward = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=False,
+                                   store_param=False, store_vjp=True, quantizer=quantizer,
+                                   accumulation_steps=args.accumulation_steps,
+                                   accumulation_averaging=args.accumulation_averaging,
+                                   approximate_input=args.approximate_input)
 
     # Optimization
     if args.goyal_lr_scaling:
@@ -534,8 +533,8 @@ if __name__ == '__main__':
         net = AsynchronousParallel(arch, n_devices=args.ngpus)
     else:
         net = AsynchronousSequential(arch).to(device, dtype)
-    net_sync = SynchronousSequential(arch_sync).to(device, dtype)
-    net_sync_delayed = SynchronousSequential(arch_sync_delayed).to(device, dtype)
+    net_sync_forward = SynchronousSequential(arch_sync_forward).to(device, dtype)
+    net_sync_backward = SynchronousSequential(arch_sync_backward).to(device, dtype)
 
 
     # print number of parameters
@@ -591,7 +590,7 @@ if __name__ == '__main__':
         # train and test
         (
             train_loss, train_top1, train_top5, rel_mse_metrics, norm_ratio_metrics, cosine_metrics
-        ) = train(epoch, trainloader, net, net_sync, net_sync_delayed, args.synchronization_period, device,
+        ) = train(epoch, trainloader, net, net_sync_forward, net_sync_backward, args.synchronization_period, device,
                   dtype, args)
 
         test_loss, test_top1, test_top5 = test(epoch, testloader, net, device, dtype, args)
