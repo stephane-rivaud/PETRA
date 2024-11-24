@@ -40,7 +40,7 @@ echo "gpu_type: $gpu_type"
 echo "output_dir: $output_dir"
 echo "dataset: $dataset"
 echo "n_layers: $n_layers"
-
+echo "hidden_size: $hidden_size"
 echo "store_vjp: $store_vjp"
 echo "synchronous: $synchronous"
 echo "store_input: $store_input"
