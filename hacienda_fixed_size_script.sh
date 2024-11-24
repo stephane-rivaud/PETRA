@@ -22,15 +22,16 @@ output_dir=$2   # output directory for logs and checkpoints
 # command parameters
 dataset=$3
 n_layers=$4
-synchronous=$5
-store_vjp=$6
-store_input=$7
-store_param=$8
-approximate_input=$9
-accumulation_steps=${10}
-lr=${11}
-batch_size=${12}
-wandb_project=${13}
+hidden_size=$5
+synchronous=$6
+store_vjp=$7
+store_input=$8
+store_param=$9
+approximate_input=${10}
+accumulation_steps=${11}
+lr=${12}
+batch_size=${13}
+wandb_project=${14}
 # ---------------------
 filename="${dataset}-${n_layers}-sync_${synchronous}-vjp_${store_vjp}-input_${store_input}-param_${store_param}-approx_input_${approximate_input}-acc_steps_${accumulation_steps}-lr_${lr}-bs_${batch_size}"
 
@@ -39,6 +40,7 @@ echo "gpu_type: $gpu_type"
 echo "output_dir: $output_dir"
 echo "dataset: $dataset"
 echo "n_layers: $n_layers"
+
 echo "store_vjp: $store_vjp"
 echo "synchronous: $synchronous"
 echo "store_input: $store_input"
@@ -79,8 +81,9 @@ elif [ "$dataset" == 'imagenet' ]; then
   command="${command} --dataset imagenet --batch-size $batch_size -p $printf --workers $workers --dir /gpfsdswork/dataset/imagenet"
 fi
 
-# n_layers
+# model
 command="${command} --n-layers $n_layers"
+command="${command} --hidden-size $hidden_size"
 
 # training
 if [ "$synchronous" == 'true' ]; then
@@ -120,9 +123,9 @@ command="${command} --goyal-lr-scaling"
 
 # scheduling
 if [ "$dataset" == 'cifar10' ] || [ "$dataset" == 'cifar100' ]; then
-  command="${command} --scheduler steplr --max-epoch 300 --warm-up 5 --lr-decay-fact 0.1 --lr-decay-milestones 150 225"
+  command="${command} --scheduler steplr --max-epoch 300 --warm-up 15 --lr-decay-fact 0.1 --lr-decay-milestones 150 225"
 elif [ "$dataset" == 'imagenet32' ] || [ "$dataset" == 'imagenet' ]; then
-  command="${command} --scheduler steplr --max-epoch 90 --warm-up 5 --lr-decay-fact 0.1 --lr-decay-milestones 30 60 80"
+  command="${command} --scheduler steplr --max-epoch 90 --warm-up 15 --lr-decay-fact 0.1 --lr-decay-milestones 30 60 80"
 fi
 
 

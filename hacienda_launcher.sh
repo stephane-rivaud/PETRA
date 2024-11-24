@@ -18,7 +18,7 @@ approximate_input='false'
 accumulation_steps=1
 lr=0.1
 batch_size=64
-wandb_project='iclr2025-async-rebuttal-true-delay'
+wandb_project='iclr2025-async-rebuttal-delay-fixed'
 
 # testing a single job
 for dataset in 'cifar10' 'cifar100'; do

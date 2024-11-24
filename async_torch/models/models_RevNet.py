@@ -480,13 +480,13 @@ class Bottleneck(AsynchronousGenericLayer):
         return x, tilde_x
 
 
-def make_layers_revnet_fixed_size(dataset, n_layers, nclass=10, last_bn_zero_init=False,
+def make_layers_revnet_fixed_size(dataset, n_layers, nclass=10, hidden_size=256, last_bn_zero_init=False,
                                   store_input=True, store_param=True, store_vjp=False,
                                   quantizer=QuantizSimple,
                                   accumulation_steps=1, accumulation_averaging=False, approximate_input=False):
     layers = []
     in_channels = 3
-    channels = 256
+    channels = hidden_size
     if dataset == 'imagenet':
         kernel_size, stride, padding, max_pool = 7, 2, 3, True
     else:

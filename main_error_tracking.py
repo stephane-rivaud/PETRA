@@ -32,7 +32,6 @@ def get_args():
     parser.add_argument('--model', default='vgg', type=str, help='Architecture')
     parser.add_argument('--last-bn-zero-init', action='store_true', default=False,
                         help='Initialize gamma parameter of last bn to zero in each residual block.')
-    parser.add_argument('--layer-tracking', type=int, default=5, help='Layer to track')
 
     # ----- Optimization
     parser.add_argument('--max-epoch', default=100, type=int, help='learning rate')
@@ -274,9 +273,9 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
                             count += 1
 
                         # get gradients
-                        grad_forward = model_sync_forward.modules[layer_id].get_gradient(param)
-                        grad_backward = model_sync_backward.modules[layer_id].get_gradient(param)
-                        grad_async = model.modules[layer_id].get_gradient(param)
+                        grad_forward = model_sync_forward.modules[layer_id].get_gradient(param).clone()
+                        grad_backward = model_sync_backward.modules[layer_id].get_gradient(param).clone()
+                        grad_async = model.modules[layer_id].get_gradient(param).clone()
 
                         # normalize gradients
                         grad_forward /= opt.accumulation_steps

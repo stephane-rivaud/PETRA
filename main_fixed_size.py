@@ -32,6 +32,7 @@ def get_args():
     parser.add_argument('--last-bn-zero-init', action='store_true', default=False,
                         help='Initialize gamma parameter of last bn to zero in each residual block.')
     parser.add_argument('--n-layers', default=20, type=int, help='Number of layers in the model')
+    parser.add_argument('--hidden-size', default=256, type=int, help='Hidden size of the model')
 
     # ----- Optimization
     parser.add_argument('--max-epoch', default=100, type=int, help='learning rate')
@@ -292,7 +293,7 @@ if __name__ == '__main__':
     # Model
     print('==> Building model..')
     quantizer = get_quantizer(args.quantizer)  # load the module using its name
-    arch = make_layers_revnet_fixed_size(args.dataset, args.n_layers, num_classes,
+    arch = make_layers_revnet_fixed_size(args.dataset, args.n_layers, num_classes, args.hidden_size,
                                          last_bn_zero_init=args.last_bn_zero_init,
                                          store_input=not args.remove_ctx_input, store_param=not args.remove_ctx_param,
                                          approximate_input=args.approximate_input, store_vjp=args.store_vjp,
