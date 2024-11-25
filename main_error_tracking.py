@@ -274,7 +274,7 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
 
                 for param in model.modules[layer_id].list_parameters:
                     # some parameters may be empty, need to skip them
-                    if model.modules[layer_id].get_parameter(param).numel() == 0:
+                    if 'bias_conv' in param or model.modules[layer_id].get_parameter(param).numel() == 0:
                         continue
                     else:
                         count += 1
@@ -294,28 +294,48 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
                     grad_sync_norm_backward = grad_backward.norm()
                     grad_async_norm = grad_async.norm()
 
-                    rel_rmse['forward'] += (grad_async - grad_forward).norm() / grad_sync_norm_forward
-                    rel_rmse['backward'] += (grad_async - grad_backward).norm() / grad_sync_norm_backward
-                    rel_rmse['delay'] += (grad_forward - grad_backward).norm() / grad_sync_norm_backward
+                    rel_mse_forward = (grad_async - grad_forward).norm() / grad_sync_norm_forward
+                    rel_mse_backward = (grad_async - grad_backward).norm() / grad_sync_norm_backward
+                    rel_mse_delay = (grad_forward - grad_backward).norm() / grad_sync_norm_backward
 
-                    norm_ratio['forward'] += grad_async_norm / grad_sync_norm_forward
-                    norm_ratio['backward'] += grad_async_norm / grad_sync_norm_backward
-                    norm_ratio['delay'] += grad_sync_norm_forward / grad_sync_norm_backward
+                    norm_ratio_forward = grad_async_norm / grad_sync_norm_forward
+                    norm_ratio_backward = grad_async_norm / grad_sync_norm_backward
+                    norm_ratio_delay = grad_sync_norm_forward / grad_sync_norm_backward
 
-                    cosine['forward'] += torch.nn.functional.cosine_similarity(
+                    cosine_forward = torch.nn.functional.cosine_similarity(
                         grad_async.flatten(),
                         grad_forward.flatten(),
                         dim=0)
 
-                    cosine['backward'] += torch.nn.functional.cosine_similarity(
+                    cosine_backward = torch.nn.functional.cosine_similarity(
                         grad_async.flatten(),
                         grad_backward.flatten(),
                         dim=0)
 
-                    cosine['delay'] += torch.nn.functional.cosine_similarity(
+                    cosine_delay = torch.nn.functional.cosine_similarity(
                         grad_forward.flatten(),
                         grad_backward.flatten(),
                         dim=0)
+
+                    print(f'Layer {layer_id} - Param {param} - Count {count}'
+                          f' - Norm F: {grad_sync_norm_forward:.4f}'
+                          f' - Norm B: {grad_sync_norm_backward:.4f}'
+                          f' - Norm P: {grad_async_norm:.4f}'
+                          f' - Cos F {cosine_forward:.4f}'
+                          f' - Cos B {cosine_backward:.4f}'
+                          f' - Cos D {cosine_delay:.4f}')
+
+                    rel_rmse['forward'] += rel_mse_forward
+                    rel_rmse['backward'] += rel_mse_backward
+                    rel_rmse['delay'] += rel_mse_delay
+
+                    norm_ratio['forward'] += norm_ratio_forward
+                    norm_ratio['backward'] += norm_ratio_backward
+                    norm_ratio['delay'] += norm_ratio_delay
+
+                    cosine['forward'] += cosine_forward
+                    cosine['backward'] += cosine_backward
+                    cosine['delay'] += cosine_delay
 
                 # average over parameters
                 for metric in [rel_rmse, norm_ratio, cosine]:
@@ -615,6 +635,57 @@ if __name__ == '__main__':
 
         # log
         if args.use_wandb:
+            # approximation metrics along depth
+            if epoch % 25 == 0:
+                depth = len(net.modules)
+
+                # Relative RMSE vs Depth
+                xs = [layer_id for layer_id in range(depth)]
+                ys = [[rel_mse_metrics[layer_id][key] for layer_id in range(depth)] for key in ['forward', 'backward', 'delay']]
+                wandb.log(
+                    {
+                        f"Relative RMSE vs Depth (epoch {epoch})": wandb.plot.line_series(
+                            xs=xs,
+                            ys=ys,
+                            keys=['PETRA vs Delayed', 'PETRA vs End-to-End', 'Delayed vs End-to-End'],
+                            title=f"Relative RMSE vs Depth (epoch {epoch})",
+                            xname="Layer Index",
+                        )
+                    },
+                    step=epoch,
+                )
+
+                # Norm Ratio vs Depth
+                xs = [layer_id for layer_id in range(depth)]
+                ys = [[norm_ratio_metrics[layer_id][key] for layer_id in range(depth)] for key in ['forward', 'backward', 'delay']]
+                wandb.log(
+                    {
+                        f"Norm Ratio vs Depth (epoch {epoch})": wandb.plot.line_series(
+                            xs=xs,
+                            ys=ys,
+                            keys=['PETRA vs Delayed', 'PETRA vs End-to-End', 'Delayed vs End-to-End'],
+                            title=f"Norm Ratio vs Depth (epoch {epoch})",
+                            xname="Layer Index",
+                        )
+                    }
+                )
+
+                # Cosine vs Depth
+                xs = [layer_id for layer_id in range(depth)]
+                ys = [[cosine_metrics[layer_id][key] for layer_id in range(depth)] for key in ['forward', 'backward', 'delay']]
+                wandb.log(
+                    {
+                        f"Cosine vs Depth (epoch {epoch})": wandb.plot.line_series(
+                            xs=xs,
+                            ys=ys,
+                            keys=['PETRA vs Delayed', 'PETRA vs End-to-End', 'Delayed vs End-to-End'],
+                            title=f"Cosine vs Depth (epoch {epoch})",
+                            xname="Layer Index",
+                        )
+                    }
+                )
+
+
             # training metrics
             log_dict = {
                 'loss/train': train_loss, 'loss/test': test_loss,
