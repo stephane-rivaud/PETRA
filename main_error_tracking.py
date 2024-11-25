@@ -317,14 +317,6 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
                         grad_backward.flatten(),
                         dim=0)
 
-                    print(f'Layer {layer_id} - Param {param} - Count {count}'
-                          f' - Norm F: {grad_sync_norm_forward:.4f}'
-                          f' - Norm B: {grad_sync_norm_backward:.4f}'
-                          f' - Norm P: {grad_async_norm:.4f}'
-                          f' - Cos F {cosine_forward:.4f}'
-                          f' - Cos B {cosine_backward:.4f}'
-                          f' - Cos D {cosine_delay:.4f}')
-
                     rel_rmse['forward'] += rel_mse_forward
                     rel_rmse['backward'] += rel_mse_backward
                     rel_rmse['delay'] += rel_mse_delay
@@ -649,7 +641,6 @@ if __name__ == '__main__':
                             ys=ys,
                             keys=['PETRA vs Delayed', 'PETRA vs End-to-End', 'Delayed vs End-to-End'],
                             title=f"Relative RMSE vs Depth (epoch {epoch})",
-                            xname="Layer Index",
                         )
                     },
                     step=epoch,
