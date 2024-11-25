@@ -21,7 +21,7 @@ wandb_project="iclr2025-async-rebuttal-depth_${hidden_size}"
 
 # 30 layers
 accumulation_steps=1
-n_layers=30
+n_layers=15
 synchronous='true'
 sbatch hacienda_fixed_size_script.sh $gpu_type $output_dir $dataset $n_layers $hidden_size $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
 
