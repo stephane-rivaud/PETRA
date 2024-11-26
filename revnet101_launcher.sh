@@ -22,3 +22,10 @@ wandb_project='iclr2025-async-revnet101'
 
 # testing a single job
 sbatch revnet101_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
+
+accumulation_steps=16
+synchronous='false'
+sbatch revnet101_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
+
+synchronous='true'
+sbatch revnet101_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
