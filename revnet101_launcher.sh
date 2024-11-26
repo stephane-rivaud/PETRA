@@ -10,7 +10,7 @@ output_dir='logs/iclr2025-async-rebuttal'  # output directory for logs and check
 # command parameters
 dataset='cifar10'
 model='revnet101'
-synchronous='false'
+synchronous='true'
 store_vjp='false'
 store_input='false'
 store_param='false'
