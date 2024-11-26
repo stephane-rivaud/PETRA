@@ -8,7 +8,7 @@ gpu_type='none'  # 'a100', 'v100', 'v100-16g', 'v100-32g'
 output_dir='logs/iclr2025-async-rebuttal'  # output directory for logs and checkpoints
 
 # command parameters
-dataset='cifar10'
+dataset='cifar100'
 model='revnet101'
 synchronous='true'
 store_vjp='false'
@@ -21,6 +21,12 @@ batch_size=64
 wandb_project='iclr2025-async-revnet101'
 
 # testing a single job
+accumulation_steps=1
+synchronous='true'
+sbatch revnet101_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
+
+accumulation_steps=1
+synchronous='false'
 sbatch revnet101_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $lr $batch_size $wandb_project
 
 accumulation_steps=16
