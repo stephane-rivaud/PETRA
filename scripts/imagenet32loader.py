@@ -181,6 +181,7 @@ def prepare_imagenet32():
     # Download zip file
     url = "https://figshare.com/ndownloader/articles/4959980/versions/2"
     local_filename = os.path.join(data_dir, 'imagenet32.zip')
+    print(f'Downloading {url} to {local_filename}')
     urllib.request.urlretrieve(url, local_filename)
     print(f'\nDownload completed: {local_filename}')
 
@@ -194,6 +195,7 @@ def prepare_imagenet32():
     os.makedirs(extract_to_dir, exist_ok=True)
 
     # Open the zip file
+    print(f'Extracting {zip_file_path} to {extract_to_dir}')
     with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
         # Extract all the contents
         zip_ref.extractall(extract_to_dir)
