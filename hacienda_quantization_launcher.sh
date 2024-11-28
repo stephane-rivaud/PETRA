@@ -22,9 +22,6 @@ sbatch_arguments() {
     local time="00:30:00"
   fi
 
-  local partition="jazzy"
-  local time="00:20:00"
-
   # Output the results
   echo "$partition"
   echo "$time"
