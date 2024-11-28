@@ -418,8 +418,8 @@ if __name__ == '__main__':
                                                    args)
         test_loss, test_top1, test_top5 = test(epoch, testloader, net, device, dtype, args)
         if device == 'cuda':
-            print(f'Maximum memory allocated {torch.cuda.max_memory_allocated(device=None)} bits')
-            print(f'Maximum memory reserved {torch.cuda.max_memory_reserved(device=None)} bits')
+            print(f'Maximum memory allocated {torch.cuda.max_memory_allocated(device=None) / (1024 ** 3):.2f} GB')
+            print(f'Maximum memory reserved {torch.cuda.max_memory_reserved(device=None) / (1024 ** 3):.2f} GB')
             torch.cuda.reset_peak_memory_stats(device=None)
 
         # evaluation without compression

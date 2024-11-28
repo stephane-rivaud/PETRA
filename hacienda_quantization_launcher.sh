@@ -8,6 +8,20 @@ sbatch_arguments() {
   local model=$2
 
   # Perform some operations (example: concatenate arguments)
+  if [ $model == "revnet18" ]; then
+    local partition="jazzy"
+    local time="00:20:00"
+  elif [ $model == "revnet34" ]; then
+    local partition="jazzy"
+    local time="00:20:00"
+  elif [ $model == "revnet50" ]; then
+    local partition="jazzy"
+    local time="00:20:00"
+  elif [ $model == "revnet101" ]; then
+    local partition="jazzy"
+    local time="00:20:00"
+  fi
+
   local partition="jazzy"
   local time="00:20:00"
 
