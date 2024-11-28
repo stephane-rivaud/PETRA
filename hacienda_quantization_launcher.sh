@@ -42,13 +42,11 @@ wandb_project='iclr2025-async-rebuttal-quantization'
 
 # Call the function with multiple arguments
 output=$(sbatch_arguments "$dataset" "$model")
-echo "$output"
 
 # Read the output into variables
 IFS=$'\n' read -d '' -r partition time <<< "$output"
 
-echo "Partition: $partition"
-echo "Time: $time"
+echo "Partition: $partition, Time: $time"
 sbatch \
   --partition=$partition \
   --time=$time \
