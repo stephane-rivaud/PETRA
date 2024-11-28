@@ -39,7 +39,7 @@ output_dir='logs/iclr2025-async-rebuttal' # output directory for logs and checkp
 
 # command parameters
 dataset='imagenet32'
-model='revnet101'
+model='revnet18'
 synchronous='false'
 store_vjp='false'
 store_input='false'
@@ -69,7 +69,7 @@ sbatch \
 #    for synchronous in 'false' 'true'; do
 #      for quantize_buffer in 'true' 'false'; do
 #
-         Get the partition and time
+#         Get the partition and time
 #        output=$(sbatch_arguments "$dataset" "$model")
 #        IFS=$'\n' read -d '' -r partition time <<< "$output"
 #
