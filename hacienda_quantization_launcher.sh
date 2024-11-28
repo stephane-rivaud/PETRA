@@ -16,10 +16,10 @@ sbatch_arguments() {
     local time="07:30:00"
   elif [ $model == "revnet50" ]; then
     local partition="jazzy"
-    local time="00:20:00"
+    local time="15:30:00"
   elif [ $model == "revnet101" ]; then
-    local partition="jazzy"
-    local time="00:20:00"
+    local partition="electronic"
+    local time="00:30:00"
   fi
 
   local partition="jazzy"
@@ -42,7 +42,7 @@ output_dir='logs/iclr2025-async-rebuttal' # output directory for logs and checkp
 
 # command parameters
 dataset='cifar10'
-model='revnet50'
+model='revnet101'
 synchronous='false'
 store_vjp='false'
 store_input='false'
