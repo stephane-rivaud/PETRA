@@ -67,7 +67,7 @@ mkdir -p "$checkpoint_dir"
 checkpoint="${checkpoint_dir}/$filename.pth"
 
 # ----- Building command -----
-command="python -u main_error_tracking.py"
+command="python -u main.py"
 command="${command} --use-wandb --wandb-project $wandb_project"
 #command="${command} --name-checkpoint $checkpoint --resume $checkpoint"
 
