@@ -9,7 +9,7 @@ sbatch_arguments() {
 
   # Perform some operations (example: concatenate arguments)
   local partition="jazzy"
-  local time="00:15:00"
+  local time="00:20:00"
 
   # Output the results
   echo "$partition"
@@ -44,7 +44,7 @@ wandb_project='iclr2025-async-rebuttal-quantization'
 output=$(sbatch_arguments "$dataset" "$model")
 
 # Read the output into variables
-read -r partition time <<<"$output"
+read partition time <<< "$output"
 
 echo "Partition: $partition"
 echo "Time: $time"
