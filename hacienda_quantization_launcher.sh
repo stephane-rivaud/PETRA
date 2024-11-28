@@ -19,7 +19,7 @@ sbatch_arguments() {
     local time="15:30:00"
   elif [ $model == "revnet101" ]; then
     local partition="electronic,hard"
-    local time="00:30:00"
+    local time="15:30:00"
   fi
 
   # Output the results
@@ -57,19 +57,25 @@ output=$(sbatch_arguments "$dataset" "$model")
 # Read the output into variables
 IFS=$'\n' read -d '' -r partition time <<< "$output"
 
-echo "Partition: $partition, Time: $time"
-sbatch \
-  --partition=$partition \
-  --time=$time \
-  hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
+#echo "Partition: $partition, Time: $time"
+#sbatch \
+#  --partition=$partition \
+#  --time=$time \
+#  hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
 
 # testing a single job
-#for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
-#  for dataset in 'cifar10' 'cifar100'; do
-#    for synchronous in 'false' 'true'; do
-#      for quantize_buffer in 'true' 'false'; do
-#        sbatch hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
-#      done
-#    done
-#  done
-#done
+for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
+  for dataset in 'cifar10' 'cifar100'; do
+    for synchronous in 'false' 'true'; do
+      for quantize_buffer in 'true' 'false'; do
+
+        # Get the partition and time
+        output=$(sbatch_arguments "$dataset" "$model")
+        IFS=$'\n' read -d '' -r partition time <<< "$output"
+
+        sbatch hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
+
+      done
+    done
+  done
+done
