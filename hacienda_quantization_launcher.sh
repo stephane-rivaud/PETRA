@@ -9,16 +9,16 @@ sbatch_arguments() {
 
   # Perform some operations (example: concatenate arguments)
   if [ $model == "revnet18" ]; then
-    local partition="jazzy,funky"
+    local partition="jazzy"
     local time="04:30:00"
   elif [ $model == "revnet34" ]; then
-    local partition="jazzy,funky"
+    local partition="jazzy"
     local time="07:30:00"
   elif [ $model == "revnet50" ]; then
-    local partition="jazzy,funky"
+    local partition="jazzy"
     local time="15:30:00"
   elif [ $model == "revnet101" ]; then
-    local partition="electronic,hard"
+    local partition="electronic"
     local time="15:30:00"
   fi
 
@@ -38,7 +38,7 @@ gpu_type='none'                           # 'a100', 'v100', 'v100-16g', 'v100-32
 output_dir='logs/iclr2025-async-rebuttal' # output directory for logs and checkpoints
 
 # command parameters
-dataset='cifar10'
+dataset='imagenet32'
 model='revnet101'
 synchronous='false'
 store_vjp='false'
@@ -58,24 +58,24 @@ output=$(sbatch_arguments "$dataset" "$model")
 IFS=$'\n' read -d '' -r partition time <<< "$output"
 
 #echo "Partition: $partition, Time: $time"
-#sbatch \
-#  --partition=$partition \
-#  --time=$time \
-#  hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
+sbatch \
+  --partition=$partition \
+  --time=$time \
+  hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
 
 # testing a single job
-for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
-  for dataset in 'cifar10' 'cifar100'; do
-    for synchronous in 'false' 'true'; do
-      for quantize_buffer in 'true' 'false'; do
-
-        # Get the partition and time
-        output=$(sbatch_arguments "$dataset" "$model")
-        IFS=$'\n' read -d '' -r partition time <<< "$output"
-
-        sbatch hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
-
-      done
-    done
-  done
-done
+#for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
+#  for dataset in 'cifar10' 'cifar100'; do
+#    for synchronous in 'false' 'true'; do
+#      for quantize_buffer in 'true' 'false'; do
+#
+         Get the partition and time
+#        output=$(sbatch_arguments "$dataset" "$model")
+#        IFS=$'\n' read -d '' -r partition time <<< "$output"
+#
+#        sbatch hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
+#
+#      done
+#    done
+#  done
+#done
