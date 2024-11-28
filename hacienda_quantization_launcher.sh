@@ -42,7 +42,7 @@ output_dir='logs/iclr2025-async-rebuttal' # output directory for logs and checkp
 
 # command parameters
 dataset='cifar10'
-model='revnet34'
+model='revnet50'
 synchronous='false'
 store_vjp='false'
 store_input='false'
