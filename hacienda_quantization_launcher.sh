@@ -45,7 +45,7 @@ output=$(sbatch_arguments "$dataset" "$model")
 echo "$output"
 
 # Read the output into variables
-read partition time <<< "$output"
+read -r partition time <<< "$output"
 
 echo "Partition: $partition"
 echo "Time: $time"
