@@ -13,7 +13,7 @@ sbatch_arguments() {
     local time="04:30:00"
   elif [ $model == "revnet34" ]; then
     local partition="jazzy"
-    local time="04:30:00"
+    local time="07:30:00"
   elif [ $model == "revnet50" ]; then
     local partition="jazzy"
     local time="00:20:00"
