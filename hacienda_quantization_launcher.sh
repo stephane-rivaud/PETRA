@@ -58,10 +58,10 @@ output=$(sbatch_arguments "$dataset" "$model")
 IFS=$'\n' read -d '' -r partition time <<< "$output"
 
 echo "Partition: $partition, Time: $time"
-sbatch \
-  --partition=$partition \
-  --time=$time \
-  hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
+#sbatch \
+#  --partition=$partition \
+#  --time=$time \
+#  hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
 
 # testing a single job
 #for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
