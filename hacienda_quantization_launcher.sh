@@ -42,6 +42,7 @@ wandb_project='iclr2025-async-rebuttal-quantization'
 
 # Call the function with multiple arguments
 output=$(sbatch_arguments "$dataset" "$model")
+echo "$output"
 
 # Read the output into variables
 read partition time <<< "$output"
