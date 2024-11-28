@@ -9,16 +9,16 @@ sbatch_arguments() {
 
   # Perform some operations (example: concatenate arguments)
   if [ $model == "revnet18" ]; then
-    local partition="jazzy"
+    local partition="jazzy,funky"
     local time="04:30:00"
   elif [ $model == "revnet34" ]; then
-    local partition="jazzy"
+    local partition="jazzy,funky"
     local time="07:30:00"
   elif [ $model == "revnet50" ]; then
-    local partition="jazzy"
+    local partition="jazzy,funky"
     local time="15:30:00"
   elif [ $model == "revnet101" ]; then
-    local partition="electronic"
+    local partition="electronic,hard"
     local time="00:30:00"
   fi
 
