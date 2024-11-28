@@ -1,7 +1,6 @@
 #!/bin/bash
 
 #SBATCH --job-name=petra
-#SBATCH --partition=hard
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
