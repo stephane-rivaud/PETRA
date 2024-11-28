@@ -164,6 +164,163 @@ class BasicBlock(AsynchronousGenericLayer):
         return x, tilde_x
 
 
+class Bottleneck(AsynchronousGenericLayer):
+    def __init__(self, n_in, n_hidden, n_out, downsample=False, kernel_size=3, stride=1, padding=0, dilation=1,
+                 groups=1, eps_bn=1e-05, momentum_bn=0.1, max_pool=True, *args, **kwargs):
+
+        super(Bottleneck, self).__init__(*args, **kwargs)
+        n_in = n_in // 2
+        n_hidden = n_hidden // 2
+        n_out = n_out // 2
+        self.stride = stride
+        self.padding = padding
+        self.momentum_bn = momentum_bn
+        self.eps_bn = eps_bn
+        self.max_pool = max_pool
+        self.downsample = downsample
+
+        weight_conv_1, bias_conv_1 = init_conv(n_hidden, n_in, 1)
+        weight_bn_1, bias_bn_1 = init_batchnorm(n_hidden)
+        running_var_1, running_mean_1 = init_batchnorm(n_hidden)
+        self._register_parameters('weight_conv_1', weight_conv_1)
+        self._register_parameters('bias_conv_1', bias_conv_1)
+        self._register_parameters('weight_bn_1', weight_bn_1)
+        self._register_parameters('bias_bn_1', bias_bn_1)
+        self._register_buffers('running_mean_1', running_mean_1)
+        self._register_buffers('running_var_1', running_var_1)
+
+        weight_conv_2, bias_conv_2 = init_conv(n_hidden, n_hidden, kernel_size)
+        weight_bn_2, bias_bn_2 = init_batchnorm(n_hidden)
+        running_var_2, running_mean_2 = init_batchnorm(n_hidden)
+        self._register_parameters('weight_conv_2', weight_conv_2)
+        self._register_parameters('bias_conv_2', bias_conv_2)
+        self._register_parameters('weight_bn_2', weight_bn_2)
+        self._register_parameters('bias_bn_2', bias_bn_2)
+        self._register_buffers('running_mean_2', running_mean_2)
+        self._register_buffers('running_var_2', running_var_2)
+
+        weight_conv_3, bias_conv_3 = init_conv(n_out, n_hidden, 1)
+        weight_bn_3, bias_bn_3 = init_batchnorm(n_out)
+        running_var_3, running_mean_3 = init_batchnorm(n_out)
+        self._register_parameters('weight_conv_3', weight_conv_3)
+        self._register_parameters('bias_conv_3', bias_conv_3)
+        self._register_parameters('weight_bn_3', weight_bn_3)
+        self._register_parameters('bias_bn_3', bias_bn_3)
+        self._register_buffers('running_mean_3', running_mean_3)
+        self._register_buffers('running_var_3', running_var_3)
+
+        if downsample:
+            weight_conv_ds, bias_conv_ds = init_conv(n_out, n_in, 1)
+            weight_bn_ds, bias_bn_ds = init_batchnorm(n_out)
+            running_var_ds, running_mean_ds = init_batchnorm(n_out)
+        else:
+            weight_conv_ds, bias_conv_ds = torch.empty(0), torch.empty(0)
+            weight_bn_ds, bias_bn_ds = torch.empty(0), torch.empty(0)
+            running_var_ds, running_mean_ds = torch.empty(0), torch.empty(0)
+        self._register_parameters('weight_conv_ds', weight_conv_ds)
+        self._register_parameters('bias_conv_ds', bias_conv_ds)
+        self._register_parameters('weight_bn_ds', weight_bn_ds)
+        self._register_parameters('bias_bn_ds', bias_bn_ds)
+        self._register_buffers('running_mean_ds', running_mean_ds)
+        self._register_buffers('running_var_ds', running_var_ds)
+
+        if downsample:
+            weight_conv_tilde_ds, bias_conv_tilde_ds = init_conv(n_out, n_in, 1)
+            weight_bn_tilde_ds, bias_bn_tilde_ds = init_batchnorm(n_out)
+            running_var_tilde_ds, running_mean_tilde_ds = init_batchnorm(n_out)
+        else:
+            weight_conv_tilde_ds, bias_conv_tilde_ds = torch.empty(0), torch.empty(0)
+            weight_bn_tilde_ds, bias_bn_tilde_ds = torch.empty(0), torch.empty(0)
+            running_var_tilde_ds, running_mean_tilde_ds = torch.empty(0), torch.empty(0)
+        self._register_parameters('weight_conv_tilde_ds', weight_conv_tilde_ds)
+        self._register_parameters('bias_conv_tilde_ds', bias_conv_tilde_ds)
+        self._register_parameters('weight_bn_tilde_ds', weight_bn_tilde_ds)
+        self._register_parameters('bias_bn_tilde_ds', bias_bn_tilde_ds)
+        self._register_buffers('running_mean_tilde_ds', running_mean_tilde_ds)
+        self._register_buffers('running_var_tilde_ds', running_var_tilde_ds)
+
+    def local_f(self, x, tilde_x,
+                weight_conv_1, bias_conv_1, weight_bn_1, bias_bn_1,
+                weight_conv_2, bias_conv_2, weight_bn_2, bias_bn_2,
+                weight_conv_3, bias_conv_3, weight_bn_3, bias_bn_3,
+                weight_conv_ds, bias_conv_ds, weight_bn_ds, bias_bn_ds,
+                weight_conv_tilde_ds, bias_conv_tilde_ds, weight_bn_tilde_ds, bias_bn_tilde_ds,
+                running_mean_1, running_var_1,
+                running_mean_2, running_var_2,
+                running_mean_3, running_var_3,
+                running_mean_ds, running_var_ds,
+                running_mean_tilde_ds, running_var_tilde_ds,
+                training):
+
+        y = torch.nn.functional.conv2d(x, weight_conv_1, bias=bias_conv_1, stride=1, padding=0)
+        y = torch.nn.functional.batch_norm(y, running_mean_1, running_var_1, weight=weight_bn_1, bias=bias_bn_1,
+                                           training=training, momentum=self.momentum_bn, eps=self.eps_bn)
+        y = torch.nn.functional.relu(y, inplace=True)
+
+        y = torch.nn.functional.conv2d(y, weight_conv_2, bias=bias_conv_2, stride=self.stride, padding=self.padding)
+        y = torch.nn.functional.batch_norm(y, running_mean_2, running_var_2, weight=weight_bn_2, bias=bias_bn_2,
+                                           training=training, momentum=self.momentum_bn, eps=self.eps_bn)
+        y = torch.nn.functional.relu(y, inplace=True)
+
+        y = torch.nn.functional.conv2d(y, weight_conv_3, bias=bias_conv_3, stride=1, padding=0)
+        y = torch.nn.functional.batch_norm(y, running_mean_3, running_var_3, weight=weight_bn_3, bias=bias_bn_3,
+                                           training=training, momentum=self.momentum_bn, eps=self.eps_bn)
+        y = torch.nn.functional.relu(y, inplace=True)
+
+        if self.downsample:
+            x_ds = torch.nn.functional.conv2d(x, weight_conv_ds, bias=bias_conv_ds, stride=self.stride, padding=0)
+            x_ds = torch.nn.functional.batch_norm(x_ds, running_mean_ds, running_var_ds, weight=weight_bn_ds,
+                                                  bias=bias_bn_ds, training=training, momentum=self.momentum_bn,
+                                                  eps=self.eps_bn)
+
+            tilde_x_ds = torch.nn.functional.conv2d(tilde_x, weight_conv_tilde_ds, bias=bias_conv_tilde_ds,
+                                                    stride=self.stride, padding=0)
+            tilde_x_ds = torch.nn.functional.batch_norm(tilde_x_ds, running_mean_tilde_ds, running_var_tilde_ds,
+                                                        weight=weight_bn_tilde_ds, bias=bias_bn_tilde_ds,
+                                                        training=training, momentum=self.momentum_bn, eps=self.eps_bn)
+        else:
+            x_ds = x
+            tilde_x_ds = tilde_x
+
+        y = y + tilde_x_ds
+        tilde_y = x_ds
+        return y, tilde_y
+
+    def local_f_reversed(self, y, tilde_y,
+                         weight_conv_1, bias_conv_1, weight_bn_1, bias_bn_1,
+                         weight_conv_2, bias_conv_2, weight_bn_2, bias_bn_2,
+                         weight_conv_3, bias_conv_3, weight_bn_3, bias_bn_3,
+                         weight_conv_ds, bias_conv_ds, weight_bn_ds, bias_bn_ds,
+                         weight_conv_tilde_ds, bias_conv_tilde_ds, weight_bn_tilde_ds, bias_bn_tilde_ds,
+                         running_mean_1, running_var_1,
+                         running_mean_2, running_var_2,
+                         running_mean_3, running_var_3,
+                         running_mean_ds, running_var_ds,
+                         running_mean_tilde_ds, running_var_tilde_ds,
+                         training):
+        if self.downsample:
+            raise ValueError('Reverse pass not implemented for downsample')
+
+        fx = torch.nn.functional.conv2d(tilde_y, weight_conv_1, bias=bias_conv_1, stride=1, padding=0)
+        fx = torch.nn.functional.batch_norm(fx, running_mean_1, running_var_1, weight=weight_bn_1, bias=bias_bn_1,
+                                            training=training, momentum=self.momentum_bn, eps=self.eps_bn)
+        fx = torch.nn.functional.relu(fx, inplace=True)
+
+        fx = torch.nn.functional.conv2d(fx, weight_conv_2, bias=bias_conv_2, stride=self.stride, padding=self.padding)
+        fx = torch.nn.functional.batch_norm(fx, running_mean_2, running_var_2, weight=weight_bn_2, bias=bias_bn_2,
+                                            training=training, momentum=self.momentum_bn, eps=self.eps_bn)
+        fx = torch.nn.functional.relu(fx, inplace=True)
+
+        fx = torch.nn.functional.conv2d(fx, weight_conv_3, bias=bias_conv_3, stride=1, padding=0)
+        fx = torch.nn.functional.batch_norm(fx, running_mean_3, running_var_3, weight=weight_bn_3, bias=bias_bn_3,
+                                            training=training, momentum=self.momentum_bn, eps=self.eps_bn)
+        fx = torch.nn.functional.relu(fx, inplace=True)
+
+        x = tilde_y
+        tilde_x = y - fx
+        return x, tilde_x
+
+
 class BottleneckVariant(AsynchronousGenericLayer):
     def __init__(self, n_in, n_hidden, n_out, downsample=False, kernel_size=3, stride=1, padding=0, dilation=1,
                  groups=1, eps_bn=1e-05, momentum_bn=0.1, max_pool=True, *args, **kwargs):
@@ -323,167 +480,19 @@ class BottleneckVariant(AsynchronousGenericLayer):
         return x, tilde_x
 
 
-class Bottleneck(AsynchronousGenericLayer):
-    def __init__(self, n_in, n_hidden, n_out, downsample=False, kernel_size=3, stride=1, padding=0, dilation=1,
-                 groups=1, eps_bn=1e-05, momentum_bn=0.1, max_pool=True, *args, **kwargs):
-
-        super(Bottleneck, self).__init__(*args, **kwargs)
-        n_in = n_in // 2
-        n_hidden = n_hidden // 2
-        n_out = n_out // 2
-        self.stride = stride
-        self.padding = padding
-        self.momentum_bn = momentum_bn
-        self.eps_bn = eps_bn
-        self.max_pool = max_pool
-        self.downsample = downsample
-
-        weight_conv_1, bias_conv_1 = init_conv(n_hidden, n_in, 1)
-        weight_bn_1, bias_bn_1 = init_batchnorm(n_hidden)
-        running_var_1, running_mean_1 = init_batchnorm(n_hidden)
-        self._register_parameters('weight_conv_1', weight_conv_1)
-        self._register_parameters('bias_conv_1', bias_conv_1)
-        self._register_parameters('weight_bn_1', weight_bn_1)
-        self._register_parameters('bias_bn_1', bias_bn_1)
-        self._register_buffers('running_mean_1', running_mean_1)
-        self._register_buffers('running_var_1', running_var_1)
-
-        weight_conv_2, bias_conv_2 = init_conv(n_hidden, n_hidden, kernel_size)
-        weight_bn_2, bias_bn_2 = init_batchnorm(n_hidden)
-        running_var_2, running_mean_2 = init_batchnorm(n_hidden)
-        self._register_parameters('weight_conv_2', weight_conv_2)
-        self._register_parameters('bias_conv_2', bias_conv_2)
-        self._register_parameters('weight_bn_2', weight_bn_2)
-        self._register_parameters('bias_bn_2', bias_bn_2)
-        self._register_buffers('running_mean_2', running_mean_2)
-        self._register_buffers('running_var_2', running_var_2)
-
-        weight_conv_3, bias_conv_3 = init_conv(n_out, n_hidden, 1)
-        weight_bn_3, bias_bn_3 = init_batchnorm(n_out)
-        running_var_3, running_mean_3 = init_batchnorm(n_out)
-        self._register_parameters('weight_conv_3', weight_conv_3)
-        self._register_parameters('bias_conv_3', bias_conv_3)
-        self._register_parameters('weight_bn_3', weight_bn_3)
-        self._register_parameters('bias_bn_3', bias_bn_3)
-        self._register_buffers('running_mean_3', running_mean_3)
-        self._register_buffers('running_var_3', running_var_3)
-
-        if downsample:
-            weight_conv_ds, bias_conv_ds = init_conv(n_out, n_in, 1)
-            weight_bn_ds, bias_bn_ds = init_batchnorm(n_out)
-            running_var_ds, running_mean_ds = init_batchnorm(n_out)
-        else:
-            weight_conv_ds, bias_conv_ds = torch.empty(0), torch.empty(0)
-            weight_bn_ds, bias_bn_ds = torch.empty(0), torch.empty(0)
-            running_var_ds, running_mean_ds = torch.empty(0), torch.empty(0)
-        self._register_parameters('weight_conv_ds', weight_conv_ds)
-        self._register_parameters('bias_conv_ds', bias_conv_ds)
-        self._register_parameters('weight_bn_ds', weight_bn_ds)
-        self._register_parameters('bias_bn_ds', bias_bn_ds)
-        self._register_buffers('running_mean_ds', running_mean_ds)
-        self._register_buffers('running_var_ds', running_var_ds)
-
-        if downsample:
-            weight_conv_tilde_ds, bias_conv_tilde_ds = init_conv(n_out, n_in, 1)
-            weight_bn_tilde_ds, bias_bn_tilde_ds = init_batchnorm(n_out)
-            running_var_tilde_ds, running_mean_tilde_ds = init_batchnorm(n_out)
-        else:
-            weight_conv_tilde_ds, bias_conv_tilde_ds = torch.empty(0), torch.empty(0)
-            weight_bn_tilde_ds, bias_bn_tilde_ds = torch.empty(0), torch.empty(0)
-            running_var_tilde_ds, running_mean_tilde_ds = torch.empty(0), torch.empty(0)
-        self._register_parameters('weight_conv_tilde_ds', weight_conv_tilde_ds)
-        self._register_parameters('bias_conv_tilde_ds', bias_conv_tilde_ds)
-        self._register_parameters('weight_bn_tilde_ds', weight_bn_tilde_ds)
-        self._register_parameters('bias_bn_tilde_ds', bias_bn_tilde_ds)
-        self._register_buffers('running_mean_tilde_ds', running_mean_tilde_ds)
-        self._register_buffers('running_var_tilde_ds', running_var_tilde_ds)
-
-    def local_f(self, x, tilde_x,
-                weight_conv_1, bias_conv_1, weight_bn_1, bias_bn_1,
-                weight_conv_2, bias_conv_2, weight_bn_2, bias_bn_2,
-                weight_conv_3, bias_conv_3, weight_bn_3, bias_bn_3,
-                weight_conv_ds, bias_conv_ds, weight_bn_ds, bias_bn_ds,
-                weight_conv_tilde_ds, bias_conv_tilde_ds, weight_bn_tilde_ds, bias_bn_tilde_ds,
-                running_mean_1, running_var_1,
-                running_mean_2, running_var_2,
-                running_mean_3, running_var_3,
-                running_mean_ds, running_var_ds,
-                running_mean_tilde_ds, running_var_tilde_ds,
-                training):
-
-        y = torch.nn.functional.conv2d(x, weight_conv_1, bias=bias_conv_1, stride=1, padding=0)
-        y = torch.nn.functional.batch_norm(y, running_mean_1, running_var_1, weight=weight_bn_1, bias=bias_bn_1,
-                                           training=training, momentum=self.momentum_bn, eps=self.eps_bn)
-        y = torch.nn.functional.relu(y, inplace=True)
-
-        y = torch.nn.functional.conv2d(y, weight_conv_2, bias=bias_conv_2, stride=self.stride, padding=self.padding)
-        y = torch.nn.functional.batch_norm(y, running_mean_2, running_var_2, weight=weight_bn_2, bias=bias_bn_2,
-                                           training=training, momentum=self.momentum_bn, eps=self.eps_bn)
-        y = torch.nn.functional.relu(y, inplace=True)
-
-        y = torch.nn.functional.conv2d(y, weight_conv_3, bias=bias_conv_3, stride=1, padding=0)
-        y = torch.nn.functional.batch_norm(y, running_mean_3, running_var_3, weight=weight_bn_3, bias=bias_bn_3,
-                                           training=training, momentum=self.momentum_bn, eps=self.eps_bn)
-        y = torch.nn.functional.relu(y, inplace=True)
-
-        if self.downsample:
-            x_ds = torch.nn.functional.conv2d(x, weight_conv_ds, bias=bias_conv_ds, stride=self.stride, padding=0)
-            x_ds = torch.nn.functional.batch_norm(x_ds, running_mean_ds, running_var_ds, weight=weight_bn_ds,
-                                                  bias=bias_bn_ds, training=training, momentum=self.momentum_bn,
-                                                  eps=self.eps_bn)
-
-            tilde_x_ds = torch.nn.functional.conv2d(tilde_x, weight_conv_tilde_ds, bias=bias_conv_tilde_ds,
-                                                    stride=self.stride, padding=0)
-            tilde_x_ds = torch.nn.functional.batch_norm(tilde_x_ds, running_mean_tilde_ds, running_var_tilde_ds,
-                                                        weight=weight_bn_tilde_ds, bias=bias_bn_tilde_ds,
-                                                        training=training, momentum=self.momentum_bn, eps=self.eps_bn)
-        else:
-            x_ds = x
-            tilde_x_ds = tilde_x
-
-        y = y + tilde_x_ds
-        tilde_y = x_ds
-        return y, tilde_y
-
-    def local_f_reversed(self, y, tilde_y,
-                         weight_conv_1, bias_conv_1, weight_bn_1, bias_bn_1,
-                         weight_conv_2, bias_conv_2, weight_bn_2, bias_bn_2,
-                         weight_conv_3, bias_conv_3, weight_bn_3, bias_bn_3,
-                         weight_conv_ds, bias_conv_ds, weight_bn_ds, bias_bn_ds,
-                         weight_conv_tilde_ds, bias_conv_tilde_ds, weight_bn_tilde_ds, bias_bn_tilde_ds,
-                         running_mean_1, running_var_1,
-                         running_mean_2, running_var_2,
-                         running_mean_3, running_var_3,
-                         running_mean_ds, running_var_ds,
-                         running_mean_tilde_ds, running_var_tilde_ds,
-                         training):
-        if self.downsample:
-            raise ValueError('Reverse pass not implemented for downsample')
-
-        fx = torch.nn.functional.conv2d(tilde_y, weight_conv_1, bias=bias_conv_1, stride=1, padding=0)
-        fx = torch.nn.functional.batch_norm(fx, running_mean_1, running_var_1, weight=weight_bn_1, bias=bias_bn_1,
-                                            training=training, momentum=self.momentum_bn, eps=self.eps_bn)
-        fx = torch.nn.functional.relu(fx, inplace=True)
-
-        fx = torch.nn.functional.conv2d(fx, weight_conv_2, bias=bias_conv_2, stride=self.stride, padding=self.padding)
-        fx = torch.nn.functional.batch_norm(fx, running_mean_2, running_var_2, weight=weight_bn_2, bias=bias_bn_2,
-                                            training=training, momentum=self.momentum_bn, eps=self.eps_bn)
-        fx = torch.nn.functional.relu(fx, inplace=True)
-
-        fx = torch.nn.functional.conv2d(fx, weight_conv_3, bias=bias_conv_3, stride=1, padding=0)
-        fx = torch.nn.functional.batch_norm(fx, running_mean_3, running_var_3, weight=weight_bn_3, bias=bias_bn_3,
-                                            training=training, momentum=self.momentum_bn, eps=self.eps_bn)
-        fx = torch.nn.functional.relu(fx, inplace=True)
-
-        x = tilde_y
-        tilde_x = y - fx
-        return x, tilde_x
-
-
-def make_layers_revnet_fixed_size(dataset, n_layers, nclass=10, hidden_size=256, last_bn_zero_init=False,
-                                  store_input=True, store_param=True, store_vjp=False,
-                                  quantizer=QuantizSimple,
-                                  accumulation_steps=1, accumulation_averaging=False, approximate_input=False):
+def make_layers_revnet_fixed_size(
+        dataset, n_layers, nclass=10, hidden_size=256, last_bn_zero_init=False,
+        store_vjp=False,
+        store_input=True,
+        store_param=True,
+        approximate_input=False,
+        accumulation_steps=1,
+        accumulation_averaging=False,
+        quantizer=QuantizSimple,
+        quantize_forward_communication=False,
+        quantize_backward_communication=False,
+        quantize_buffer=False,
+):
     layers = []
     in_channels = 3
     channels = hidden_size
@@ -493,17 +502,37 @@ def make_layers_revnet_fixed_size(dataset, n_layers, nclass=10, hidden_size=256,
         kernel_size, stride, padding, max_pool = 3, 1, 1, False
 
     # First layer
-    layers += [ConvBNReLUMax(in_channels, channels, kernel_size=kernel_size, padding=padding, stride=stride,
-                             max_pool=max_pool, first_layer=True, store_input=True, store_param=store_param,
-                             store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                             accumulation_averaging=accumulation_averaging)]
+    layers += [
+        ConvBNReLUMax(
+            in_channels, channels, kernel_size=kernel_size, padding=padding, stride=stride,
+            max_pool=max_pool, first_layer=True,
+            store_vjp=store_vjp,
+            store_input=True,
+            store_param=store_param,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+            quantize_buffer=quantize_buffer,
+        )]
 
     # Residual blocks
     for i in range(n_layers):
-        layers += [BasicBlock(channels, channels, padding=1, store_input=store_input,
-                              approximate_input=approximate_input, store_param=store_param,
-                              store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                              accumulation_averaging=accumulation_averaging)]
+        layers += [
+            BasicBlock(
+                channels, channels, padding=1,
+                store_vjp=store_vjp,
+                store_input=store_input,
+                store_param=store_param,
+                approximate_input=approximate_input,
+                accumulation_steps=accumulation_steps,
+                accumulation_averaging=accumulation_averaging,
+                quantizer=quantizer,
+                quantize_forward_communication=quantize_forward_communication,
+                quantize_backward_communication=quantize_backward_communication,
+                quantize_buffer=quantize_buffer,
+            )]
 
     if last_bn_zero_init:
         for layer in layers[1:]:
@@ -513,14 +542,30 @@ def make_layers_revnet_fixed_size(dataset, n_layers, nclass=10, hidden_size=256,
 
     # Need avg pooling
     layers += [
-        AVGFlattenFullyConnectedCE(channels, nclass, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                                   accumulation_averaging=accumulation_averaging)]
+        AVGFlattenFullyConnectedCE(
+            channels, nclass,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+        )]
     return layers
 
 
-def make_layers_revnet18(dataset, nclass=10, last_bn_zero_init=False, store_input=True, store_param=True,
-                         store_vjp=False, quantizer=QuantizSimple, accumulation_steps=1,
-                         accumulation_averaging=False, approximate_input=False):
+def make_layers_revnet18(
+        dataset, nclass=10, last_bn_zero_init=False,
+        store_vjp=False,
+        store_input=True,
+        store_param=True,
+        approximate_input=False,
+        accumulation_steps=1,
+        accumulation_averaging=False,
+        quantizer=QuantizSimple,
+        quantize_forward_communication=False,
+        quantize_backward_communication=False,
+        quantize_buffer=False,
+):
     layers = []
     in_channels = 3
     channels = [64, 128, 256, 512]
@@ -530,25 +575,67 @@ def make_layers_revnet18(dataset, nclass=10, last_bn_zero_init=False, store_inpu
     else:
         kernel_size, stride, padding, max_pool = 3, 1, 1, False
 
-    layers += [ConvBNReLUMax(in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
-                             max_pool=max_pool, first_layer=True, store_input=True, store_param=store_param,
-                             store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                             accumulation_averaging=accumulation_averaging)]
+    layers += [
+        ConvBNReLUMax(
+            in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
+            max_pool=max_pool, first_layer=True,
+            store_vjp=store_vjp,
+            store_input=True,
+            store_param=store_param,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+            quantize_buffer=quantize_buffer,
+        )]
+
     x = channels[0]
     for c in channels:
         if x != c:
             layers += [
-                BasicBlock(x, c, stride=2, downsample=True, padding=1, store_input=True, store_param=store_param,
-                           store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                           accumulation_averaging=accumulation_averaging)]
+                BasicBlock(
+                    x, c, stride=2, downsample=True, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=True,
+                    store_param=store_param,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         else:
             layers += [
-                BasicBlock(x, c, padding=1, store_input=store_input, approximate_input=approximate_input,
-                           store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                           accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
-        layers += [BasicBlock(c, c, padding=1, store_input=store_input, approximate_input=approximate_input,
-                              store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                              accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
+                BasicBlock(
+                    x, c, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=store_input,
+                    store_param=store_param,
+                    approximate_input=approximate_input,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
+
+        layers += [
+            BasicBlock(
+                c, c, padding=1,
+                store_vjp=store_vjp,
+                store_input=store_input,
+                store_param=store_param,
+                approximate_input=approximate_input,
+                accumulation_steps=accumulation_steps,
+                accumulation_averaging=accumulation_averaging,
+                quantizer=quantizer,
+                quantize_forward_communication=quantize_forward_communication,
+                quantize_backward_communication=quantize_backward_communication,
+                quantize_buffer=quantize_buffer,
+            )]
         x = c
 
     if last_bn_zero_init:
@@ -559,8 +646,14 @@ def make_layers_revnet18(dataset, nclass=10, last_bn_zero_init=False, store_inpu
 
     # Need avg pooling
     layers += [
-        AVGFlattenFullyConnectedCE(channels[-1], nclass, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                                   accumulation_averaging=accumulation_averaging)]
+        AVGFlattenFullyConnectedCE(
+            channels[-1], nclass,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+        )]
     return layers
 
 
@@ -595,9 +688,19 @@ def revnet18_2_memory(dataset, nclass=10, store_input=True, store_param=True, ba
     return compute_memory('revnet18', layers, input_sizes, batch_size, accumulation_steps, store_input, store_param)
 
 
-def make_layers_revnet34(dataset, nclass=10, last_bn_zero_init=False, store_input=True, store_param=True,
-                         store_vjp=False, quantizer=QuantizSimple, accumulation_steps=1,
-                         accumulation_averaging=False, approximate_input=False):
+def make_layers_revnet34(
+        dataset, nclass=10, last_bn_zero_init=False,
+        store_vjp=False,
+        store_input=True,
+        store_param=True,
+        approximate_input=False,
+        accumulation_steps=1,
+        accumulation_averaging=False,
+        quantizer=QuantizSimple,
+        quantize_forward_communication=False,
+        quantize_backward_communication=False,
+        quantize_buffer=False,
+):
     layers = []
     in_channels = 3
     inplanes = 64
@@ -611,23 +714,52 @@ def make_layers_revnet34(dataset, nclass=10, last_bn_zero_init=False, store_inpu
         kernel_size, stride, padding, max_pool = 7, 2, 3, True
     else:
         kernel_size, stride, padding, max_pool = 3, 1, 1, False
-    layers += [ConvBNReLUMax(in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
-                             max_pool=max_pool, first_layer=True, store_input=True, store_param=store_param,
-                             store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                             accumulation_averaging=accumulation_averaging)]
+    layers += [
+        ConvBNReLUMax(
+            in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
+            max_pool=max_pool, first_layer=True,
+            store_vjp=store_vjp,
+            store_input=True,
+            store_param=store_param,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+            quantize_buffer=quantize_buffer,
+        )]
 
     x = inplanes
     for c in channels:
         if x != c:
             layers += [
-                BasicBlock(x, c, stride=2, downsample=True, padding=1, store_input=True, store_param=store_param,
-                           store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                           accumulation_averaging=accumulation_averaging)]
+                BasicBlock(
+                    x, c, stride=2, downsample=True, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=True,
+                    store_param=store_param,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         else:
             layers += [
-                BasicBlock(x, c, padding=1, store_input=store_input, approximate_input=approximate_input,
-                           store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                           accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
+                BasicBlock(
+                    x, c, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=store_input,
+                    store_param=store_param,
+                    approximate_input=approximate_input,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         x = c
 
     if last_bn_zero_init:
@@ -638,8 +770,14 @@ def make_layers_revnet34(dataset, nclass=10, last_bn_zero_init=False, store_inpu
 
     # Need avg pooling
     layers += [
-        AVGFlattenFullyConnectedCE(channels[-1], nclass, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                                   accumulation_averaging=accumulation_averaging)]
+        AVGFlattenFullyConnectedCE(
+            channels[-1], nclass,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+        )]
     return layers
 
 
@@ -690,9 +828,19 @@ def revnet34_2_memory(dataset, nclass=10, store_input=True, store_param=True, ba
     return compute_memory('revnet34', layers, input_sizes, batch_size, accumulation_steps, store_input, store_param)
 
 
-def make_layers_revnet50(dataset, nclass=10, last_bn_zero_init=False, store_input=True, store_param=True,
-                         store_vjp=False, quantizer=QuantizSimple, accumulation_steps=1,
-                         accumulation_averaging=False, approximate_input=False):
+def make_layers_revnet50(
+        dataset, nclass=10, last_bn_zero_init=False,
+        store_vjp=False,
+        store_input=True,
+        store_param=True,
+        approximate_input=False,
+        accumulation_steps=1,
+        accumulation_averaging=False,
+        quantizer=QuantizSimple,
+        quantize_forward_communication=False,
+        quantize_backward_communication=False,
+        quantize_buffer=False,
+):
     layers = []
     in_channels = 3
     channels = [64,
@@ -712,27 +860,66 @@ def make_layers_revnet50(dataset, nclass=10, last_bn_zero_init=False, store_inpu
     else:
         kernel_size, stride, padding, max_pool = 3, 1, 1, False
 
-    layers += [ConvBNReLUMax(in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
-                             max_pool=max_pool, first_layer=True, store_input=True, store_param=store_param,
-                             store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                             accumulation_averaging=accumulation_averaging)]
+    layers += [
+        ConvBNReLUMax(
+            in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
+            max_pool=max_pool,
+            first_layer=True,
+            store_vjp=store_vjp,
+            store_input=True,
+            store_param=store_param,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+            quantize_buffer=quantize_buffer,
+        )]
 
     for k, (n_in, n_h, n_out) in enumerate(zip(channels[:-1], hidden_sizes, channels[1:])):
         if k == 0:
-            layers += [Bottleneck(n_in, n_h, n_out, stride=1, downsample=True, padding=1, store_input=True,
-                                  store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                                  accumulation_steps=accumulation_steps,
-                                  accumulation_averaging=accumulation_averaging)]
+            layers += [
+                Bottleneck(
+                    n_in, n_h, n_out, stride=1, downsample=True, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=True,
+                    store_param=store_param,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         elif n_in != n_out:
-            layers += [Bottleneck(n_in, n_h, n_out, stride=2, downsample=True, padding=1, store_input=True,
-                                  store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                                  accumulation_steps=accumulation_steps,
-                                  accumulation_averaging=accumulation_averaging)]
+            layers += [
+                Bottleneck(
+                    n_in, n_h, n_out, stride=2, downsample=True, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=True,
+                    store_param=store_param,
+                    quantizer=quantizer,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         else:
             layers += [
-                Bottleneck(n_in, n_h, n_out, padding=1, store_input=store_input, approximate_input=approximate_input,
-                           store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                           accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
+                Bottleneck(
+                    n_in, n_h, n_out, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=store_input,
+                    store_param=store_param,
+                    approximate_input=approximate_input,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
 
     if last_bn_zero_init:
         for layer in layers[1:]:
@@ -742,14 +929,30 @@ def make_layers_revnet50(dataset, nclass=10, last_bn_zero_init=False, store_inpu
 
     # Need avg pooling
     layers += [
-        AVGFlattenFullyConnectedCE(channels[-1], nclass, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                                   accumulation_averaging=accumulation_averaging)]
+        AVGFlattenFullyConnectedCE(
+            channels[-1], nclass,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+        )]
     return layers
 
 
-def make_layers_revnet50_variant(dataset, nclass=10, last_bn_zero_init=False, store_input=True, store_param=True,
-                                 store_vjp=False, quantizer=QuantizSimple, accumulation_steps=1,
-                                 accumulation_averaging=False, approximate_input=False):
+def make_layers_revnet50_variant(
+        dataset, nclass=10, last_bn_zero_init=False,
+        store_vjp=False,
+        store_input=True,
+        store_param=True,
+        approximate_input=False,
+        accumulation_steps=1,
+        accumulation_averaging=False,
+        quantizer=QuantizSimple,
+        quantize_forward_communication=False,
+        quantize_backward_communication=False,
+        quantize_buffer=False,
+):
     layers = []
     in_channels = 3
     channels = [64,
@@ -769,28 +972,65 @@ def make_layers_revnet50_variant(dataset, nclass=10, last_bn_zero_init=False, st
     else:
         kernel_size, stride, padding, max_pool = 3, 1, 1, False
 
-    layers += [ConvBNReLUMax(in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
-                             max_pool=max_pool, first_layer=True, store_input=True, store_param=store_param,
-                             store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                             accumulation_averaging=accumulation_averaging)]
+    layers += [
+        ConvBNReLUMax(
+            in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
+            max_pool=max_pool, first_layer=True,
+            store_vjp=store_vjp,
+            store_input=True,
+            store_param=store_param,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+            quantize_buffer=quantize_buffer,
+        )]
 
     for k, (n_in, n_h, n_out) in enumerate(zip(channels[:-1], hidden_sizes, channels[1:])):
         if k == 0:
-            layers += [BottleneckVariant(n_in, n_h, n_out, stride=1, downsample=True, padding=1, store_input=True,
-                                         store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                                         accumulation_steps=accumulation_steps,
-                                         accumulation_averaging=accumulation_averaging)]
+            layers += [
+                BottleneckVariant(
+                    n_in, n_h, n_out, stride=1, downsample=True, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=True,
+                    store_param=store_param,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         elif n_in != n_out:
-            layers += [BottleneckVariant(n_in, n_h, n_out, stride=2, downsample=True, padding=1, store_input=True,
-                                         store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                                         accumulation_steps=accumulation_steps,
-                                         accumulation_averaging=accumulation_averaging)]
+            layers += [
+                BottleneckVariant(
+                    n_in, n_h, n_out, stride=2, downsample=True, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=True,
+                    store_param=store_param,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         else:
             layers += [
-                BottleneckVariant(n_in, n_h, n_out, padding=1, store_input=store_input,
-                                  approximate_input=approximate_input,
-                                  store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                                  accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
+                BottleneckVariant(
+                    n_in, n_h, n_out, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=store_input,
+                    store_param=store_param,
+                    approximate_input=approximate_input,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
 
     if last_bn_zero_init:
         for layer in layers[1:]:
@@ -800,8 +1040,14 @@ def make_layers_revnet50_variant(dataset, nclass=10, last_bn_zero_init=False, st
 
     # Need avg pooling
     layers += [
-        AVGFlattenFullyConnectedCE(channels[-1], nclass, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                                   accumulation_averaging=accumulation_averaging)]
+        AVGFlattenFullyConnectedCE(
+            channels[-1], nclass,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+        )]
     return layers
 
 
@@ -829,9 +1075,19 @@ def revnet50_2_memory(dataset, nclass=10, store_input=True, store_param=True, ba
     return compute_memory('revnet50', layers, input_sizes, batch_size, accumulation_steps, store_input, store_param)
 
 
-def make_layers_revnet101(dataset, nclass=10, last_bn_zero_init=False, store_input=True, store_param=True,
-                          store_vjp=False, quantizer=QuantizSimple, accumulation_steps=1,
-                          accumulation_averaging=False, approximate_input=False):
+def make_layers_revnet101(
+        dataset, nclass=10, last_bn_zero_init=False,
+        store_vjp=False,
+        store_input=True,
+        store_param=True,
+        approximate_input=False,
+        accumulation_steps=1,
+        accumulation_averaging=False,
+        quantizer=QuantizSimple,
+        quantize_forward_communication=False,
+        quantize_backward_communication=False,
+        quantize_buffer=False,
+):
     layers = []
     in_channels = 3
     channels = [64] + [256] * 3 + [512] * 4 + [1024] * 23 + [2048] * 3
@@ -843,27 +1099,65 @@ def make_layers_revnet101(dataset, nclass=10, last_bn_zero_init=False, store_inp
     else:
         kernel_size, stride, padding, max_pool = 3, 1, 1, False
 
-    layers += [ConvBNReLUMax(in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
-                             max_pool=max_pool, first_layer=True, store_input=True, store_param=store_param,
-                             store_vjp=store_vjp, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                             accumulation_averaging=accumulation_averaging)]
+    layers += [
+        ConvBNReLUMax(
+            in_channels, channels[0], kernel_size=kernel_size, padding=padding, stride=stride,
+            max_pool=max_pool, first_layer=True,
+            store_vjp=store_vjp,
+            store_input=True,
+            store_param=store_param,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+            quantize_buffer=quantize_buffer,
+        )]
 
     for k, (n_in, n_h, n_out) in enumerate(zip(channels[:-1], hidden_sizes, channels[1:])):
         if k == 0:
-            layers += [Bottleneck(n_in, n_h, n_out, stride=1, downsample=True, padding=1, store_input=True,
-                                  store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                                  accumulation_steps=accumulation_steps,
-                                  accumulation_averaging=accumulation_averaging)]
+            layers += [
+                Bottleneck(
+                    n_in, n_h, n_out, stride=1, downsample=True, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=True,
+                    store_param=store_param,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         elif n_in != n_out:
-            layers += [Bottleneck(n_in, n_h, n_out, stride=2, downsample=True, padding=1, store_input=True,
-                                  store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                                  accumulation_steps=accumulation_steps,
-                                  accumulation_averaging=accumulation_averaging)]
+            layers += [
+                Bottleneck(
+                    n_in, n_h, n_out, stride=2, downsample=True, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=True,
+                    store_param=store_param,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
         else:
             layers += [
-                Bottleneck(n_in, n_h, n_out, padding=1, store_input=store_input, approximate_input=approximate_input,
-                           store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                           accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
+                Bottleneck(
+                    n_in, n_h, n_out, padding=1,
+                    store_vjp=store_vjp,
+                    store_input=store_input,
+                    store_param=store_param,
+                    approximate_input=approximate_input,
+                    accumulation_steps=accumulation_steps,
+                    accumulation_averaging=accumulation_averaging,
+                    quantizer=quantizer,
+                    quantize_forward_communication=quantize_forward_communication,
+                    quantize_backward_communication=quantize_backward_communication,
+                    quantize_buffer=quantize_buffer,
+                )]
 
     if last_bn_zero_init:
         for layer in layers[1:]:
@@ -873,8 +1167,14 @@ def make_layers_revnet101(dataset, nclass=10, last_bn_zero_init=False, store_inp
 
     # Need avg pooling
     layers += [
-        AVGFlattenFullyConnectedCE(channels[-1], nclass, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                                   accumulation_averaging=accumulation_averaging)]
+        AVGFlattenFullyConnectedCE(
+            channels[-1], nclass,
+            accumulation_steps=accumulation_steps,
+            accumulation_averaging=accumulation_averaging,
+            quantizer=quantizer,
+            quantize_forward_communication=quantize_forward_communication,
+            quantize_backward_communication=quantize_backward_communication,
+        )]
     return layers
 
 

@@ -5,8 +5,19 @@ from .compression import QuantizSimple
 
 
 class AsynchronousGenericLayer:
-    def __init__(self, first_layer=False, quantizer=QuantizSimple, store_input=True, store_param=True, store_vjp=False,
-                 accumulation_steps=1, accumulation_averaging=True, approximate_input=False):
+    def __init__(self,
+                 first_layer=False,
+                 store_vjp=False,
+                 store_input=True,
+                 store_param=True,
+                 approximate_input=False,
+                 accumulation_steps=1,
+                 accumulation_averaging=True,
+                 quantizer=QuantizSimple,
+                 quantize_forward_communication=False,
+                 quantize_backward_communication=False,
+                 quantize_buffer=False,
+                 ):
 
         if approximate_input:
             print('Approximate input is True, store_input is set to False, store_param is set to True and store_vjp is set to False')
@@ -20,21 +31,35 @@ class AsynchronousGenericLayer:
             store_param = False
             approximate_input = False
 
+        # Layer attributes
+        self.first_layer = first_layer
+        self.synchronize_buffers = False
+
+        # buffer memory
+        self.buffer = CachingBufferSimple()
+
+        # parameters, buffers and optimizer
         self.list_parameters = []
         self.list_buffers = []
-        self.buffer = CachingBufferSimple()
-        self.first_layer = first_layer
-        self.quantizer = quantizer()
+        self.optimizers = []
+
+        # gradient computation
+        self.store_vjp = store_vjp
         self.store_input = store_input
         self.store_param = store_param
-        self.store_vjp = store_vjp
-        self.accumulation_steps = accumulation_steps
-        self.accumulation_averaging = accumulation_averaging
         self.approximate_input = approximate_input
 
+        # accumulation
+        self.accumulation_steps = accumulation_steps
+        self.accumulation_averaging = accumulation_averaging
         self.grad_counter = 0
-        self.synchronize_buffers = False
-        self.optimizers = []
+
+        # quantization
+        self.quantizer = quantizer()
+        self.quantize_forward_communication = quantize_forward_communication
+        self.quantize_backward_communication = quantize_backward_communication
+        self.quantize_buffer = quantize_buffer
+
 
     def state_list(self):
         param_forward = {attr: self.get_parameter(attr, mode='forward').clone() for attr in self.list_parameters}
@@ -213,21 +238,21 @@ class AsynchronousGenericLayer:
             the output of the corresponding forward pass
         """
         training = input_id is not None  # in this case, this is train mode
-        # print(f'Forward function -- training: {training} -- input_id: {input_id}')
 
         if training and not self.store_vjp:
             store = tuple()
             if self.store_input:
-                # print('store input')
-                store += (input,)
+                stored_input = input.clone() if torch.is_tensor(input) else tuple(inp.clone() for inp in input)
+                store += (stored_input,)
             if self.store_param:
-                # print('store param')
                 store += tuple([self.get_parameter(name, mode='forward').clone() for name in self.list_parameters])
             store += (input_id,)
-            self.buffer.add(self.quantizer.quantize_buffer_forward(store))
+            if self.quantize_buffer:
+                store = self.quantizer.quantize_buffer_forward(store)
+            self.buffer.add(store)
 
-        if not self.first_layer:
-            input = self.quantizer.dequantize_input_forward(input)
+        if not self.first_layer and self.quantize_forward_communication:
+            input = self.quantizer.dequantize_forward_communication(input)
 
         # define the local function
         list_parameter_forward = [self.get_parameter(name, mode='forward').clone() for name in self.list_parameters]
@@ -236,7 +261,6 @@ class AsynchronousGenericLayer:
 
         # forward pass
         if training and self.store_vjp:
-            # print('store-vjp option is active')
             # process the forward pass while creating vjp
             if isinstance(input, tuple):
                 n_input = len(input)
@@ -247,7 +271,6 @@ class AsynchronousGenericLayer:
             else:
                 raise TypeError('Input should be a tensor or a tuple of tensors.')
         else:
-            # print('store-vjp option is not active')
             # process the forward pass without vjp
             if isinstance(input, tuple):
                 output = local_f(*input, *list_parameter_forward)
@@ -258,16 +281,15 @@ class AsynchronousGenericLayer:
 
         # store vjp in the buffer
         if training and self.store_vjp:
-            # print('storing store-vjp')
             store = (vjpfunc,)
             store += tuple([buffer.clone() for buffer in list_buffer_forward])
             store += (n_input, input_id)
             self.buffer.add(store)
 
         # quantize output
-        output = self.quantizer.quantize_output_forward(output)
+        if self.quantize_forward_communication:
+            output = self.quantizer.quantize_forward_communication(output)
 
-        # print()
         return output
 
     def backward(self, output, grad_output, input_id):
@@ -294,10 +316,14 @@ class AsynchronousGenericLayer:
         input_id : int
             allows to recover a batch given the id, which is propagated to the next layer
         """
-        # print('Backward function -- input_id: ', input_id)
-        grad_output = self.quantizer.dequantize_grad_output_backward(grad_output)
+
+        if self.quantize_backward_communication:
+            output = self.quantizer.dequantize_backward_communication(output)
+            grad_output = self.quantizer.dequantize_backward_communication(grad_output)
 
         buffer = self.buffer.get()
+        if self.quantize_buffer:
+            buffer = self.quantizer.dequantize_buffer_backward(buffer)
 
         # input_id
         input_id2 = buffer[-1]
@@ -305,7 +331,6 @@ class AsynchronousGenericLayer:
 
         # vjp function
         if self.store_vjp:
-            # print('store-vjp option is active')
             vjpfunc = buffer[0]
 
             start_index = 1
@@ -324,13 +349,11 @@ class AsynchronousGenericLayer:
         else:
             # parameters
             if self.store_param:
-                # print('store param: retrieving forward weights from buffer to compute jacobian')
                 start_index = 1 if self.store_input else 0
                 end_index = start_index + len(self.list_parameters)
                 list_parameters = list(buffer[start_index:end_index])
                 assert end_index == len(buffer) - 1, f'Buffer size mismatch: {end_index} vs {len(buffer) - 1}'
             else:
-                # print('no store param: using backward weights to compute jacobian')
                 list_parameters = [self.get_parameter(name, mode='backward') for name in self.list_parameters]
 
             # buffers
@@ -338,14 +361,11 @@ class AsynchronousGenericLayer:
 
             # input
             if self.store_input:
-                # print('store input: retrieving forward input from buffer')
                 input = buffer[0]
             else:
                 if self.approximate_input:
-                    # print('approximate input: reconstructing input from output with backward parameters')
                     list_param_reverse = [self.get_parameter(name, mode='backward') for name in self.list_parameters]
                 else:
-                    # print('no store input: reconstructing input from output according to store param option')
                     list_param_reverse = list_parameters
                 if isinstance(output, tuple):
                     input = self.local_f_reversed(*output, *list_param_reverse, *list_buffer_backward, True)
@@ -364,6 +384,7 @@ class AsynchronousGenericLayer:
             elif isinstance(input, tuple):
                 output, vjpfunc = torch.func.vjp(local_f, *input, *list_parameters)
             else:
+                print(f'input: {input}')
                 raise TypeError('Input should be a tensor or a tuple of tensors.')
             del output
 
@@ -387,7 +408,9 @@ class AsynchronousGenericLayer:
         # update gradient counter
         self.grad_counter = self.grad_counter + 1
 
-        grad_input = self.quantizer.quantize_grad_input_backward(grad_input)
+        if self.quantize_backward_communication:
+            input = self.quantizer.quantize_backward_communication(input)
+            grad_input = self.quantizer.quantize_backward_communication(grad_input)
 
         self.last_id = input_id
         return input, grad_input, input_id
@@ -412,7 +435,6 @@ class AsynchronousGenericLayer:
         return output, label, input_id
 
     def update(self, set_grad_to_none=True):
-        # self.grad_counter = (self.grad_counter + 1) % self.accumulation_steps
         if self.grad_counter % self.accumulation_steps == 0:
             for optimizer in self.optimizers:
                 list_param_backward = []
@@ -448,8 +470,8 @@ class AsynchronousFinal(AsynchronousGenericLayer):
         pass
 
     def forward_and_backward(self, input, label, input_id=None):
-        if not self.first_layer:
-            input = self.quantizer.dequantize_input_forward(input)
+        if not self.first_layer and self.quantize_forward_communication:
+            input = self.quantizer.dequantize_forward_communication(input)
 
         self.synchronize_forwardbackward()  # since it is the last layer, parameters forward=parameters backward
 
@@ -498,5 +520,7 @@ class AsynchronousFinal(AsynchronousGenericLayer):
         # update gradient counter
         self.grad_counter = self.grad_counter + 1
 
-        grad_input = self.quantizer.quantize_grad_input_backward(grad_input)
+        if self.quantize_backward_communication:
+            grad_input = self.quantizer.quantize_backward_communication(grad_input)
+
         return input, grad_input, [loss, input_id, pred, label]

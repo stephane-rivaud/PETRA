@@ -49,9 +49,17 @@ class FlattenFullyConnectedCE(AsynchronousFinal):
         return x
 
 
-def make_layers_VGG(cfg=(64, 'A', 128, 'A', 256, 256, 'A', 512, 512, 'A', 512, 512, 'A'), nclass=10,
-                    store_param=True, store_vjp=False, quantizer=QuantizSimple, accumulation_steps=1,
-                    accumulation_averaging=False):
+def make_layers_VGG(cfg=(64, 'A', 128, 'A', 256, 256, 'A', 512, 512, 'A', 512, 512, 'A'),
+                    nclass=10,
+                    store_vjp=False,
+                    store_param=True,
+                    accumulation_steps=1,
+                    accumulation_averaging=False,
+                    quantizer=QuantizSimple,
+                    quantize_forward_communication=False,
+                    quantize_backward_communication=False,
+                    quantize_buffer=False,
+                    ):
     layers = []
     in_channels = 3
     depth = 0
@@ -64,14 +72,31 @@ def make_layers_VGG(cfg=(64, 'A', 128, 'A', 256, 256, 'A', 512, 512, 'A', 512, 5
         else:
             if s == 1 and x == 512:
                 s = 2
-            layers += [ConvBNReLU(in_channels, x, kernel_size=3, padding=1, stride=s, first_layer=first_layer,
-                                  store_param=store_param, store_vjp=store_vjp, quantizer=quantizer,
-                                  accumulation_steps=accumulation_steps, accumulation_averaging=accumulation_averaging)]
+            layers += [
+                ConvBNReLU(in_channels, x, kernel_size=3, padding=1, stride=s,
+                           first_layer=first_layer,
+                           store_vjp=store_vjp,
+                           store_param=store_param,
+                           accumulation_steps=accumulation_steps,
+                           accumulation_averaging=accumulation_averaging,
+                           quantizer=quantizer,
+                           quantize_forward_communication=quantize_forward_communication,
+                           quantize_backward_communication=quantize_backward_communication,
+                           quantize_buffer=quantize_buffer,
+                           )
+            ]
             in_channels = x
             s = 1
         depth += 1
         first_layer = False
-    layers += [FlattenFullyConnectedCE(512, nclass, quantizer=quantizer, accumulation_steps=accumulation_steps,
-                                       accumulation_averaging=accumulation_averaging)]
+    layers += [FlattenFullyConnectedCE(512,
+                                       nclass,
+                                       quantizer=quantizer,
+                                       accumulation_steps=accumulation_steps,
+                                       accumulation_averaging=accumulation_averaging,
+                                       quantize_forward_communication=quantize_forward_communication,
+                                       quantize_backward_communication=quantize_backward_communication,
+                                       quantize_buffer=quantize_buffer,
+                                       )]
 
     return layers

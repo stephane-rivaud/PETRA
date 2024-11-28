@@ -54,7 +54,7 @@ def get_args():
 
     # ----- Scheduler
     parser.add_argument('--warm-up', type=int, default=0, help='LR warm-up period.')
-    parser.add_argument('--scheduler', type=str, default='steplr', help='LR Scheduler',
+    parser.add_argument('--scheduler', type=str, default='steplr', help='LR Scheduler.',
                         choices=['steplr', 'polynomial', 'cosine', 'goyal_original', 'goyal'])
     parser.add_argument('--lr-scaling', action='store_true', default=False,
                         help='Scale lr with accumulation steps.')
@@ -63,21 +63,22 @@ def get_args():
                              'Precedence over --lr-scaling.')
     # steplr hyper-parameters
     parser.add_argument('--lr-decay-milestones', nargs='+', type=int, default=[30, 60, 90],
-                        help='decay learning rate at these milestone epochs (default: [30, 60, 90])')
+                        help='Decays learning rate at these milestone epochs (default: [30, 60, 90]).')
     parser.add_argument('--lr-decay-fact', type=float, default=0.1,
-                        help='learning rate decay factor to use at milestone epochs (default: 0.1)')
+                        help='Learning rate decay factor to use at milestone epochs (default: 0.1).')
 
     # ----- Training
     parser.add_argument('--synchronous', default=False, action='store_true',
-                        help='Use synchronous implementation')
+                        help='Use synchronous implementation.')
     parser.add_argument('--parallel', default=False, action='store_true',
-                        help='Use sequential asynchronous implementation')
-    parser.add_argument('--quantizer', type=str, default='QuantizSimple', help='quantization class to use')
+                        help='Use sequential asynchronous implementation.')
     parser.add_argument('--synchronization-period', type=int, default=1,
-                        help='synchronization period (default: 1)')
+                        help='Synchronization period between backward and forward weights (default: 1).')
 
     # ----- Gradient computation
     parser.add_argument('--batch-size', default=128, type=int, help='mini-batch size')
+    parser.add_argument('--store-vjp', default=False, action='store_true',
+                        help='Store the VJP in the buffer between the forward and backward pass.')
     parser.add_argument('--remove-ctx-input', default=False, action='store_true',
                         help='Option to avoid storing input in buffer between the forward and backward pass.'
                              'Only effective for reversible architectures.')
@@ -86,12 +87,19 @@ def get_args():
     parser.add_argument('--approximate-input', default=False, action='store_true',
                         help='Option to avoid storing input in buffer between the forward and backward pass.'
                              'Only effective for reversible architectures.')
-    parser.add_argument('--store-vjp', default=False, action='store_true',
-                        help='Store the VJP in the buffer between the forward and backward pass.')
     parser.add_argument('--accumulation-steps', type=int, default=1,
                         help='Number of gradient accumulation steps (default: 1)')
     parser.add_argument('--accumulation-averaging', action='store_true', default=False,
                         help='Divide final loss by the number of accumulation steps')
+
+    # Quantization
+    parser.add_argument('--quantizer', type=str, default='QuantizSimple', help='Quantization class to use')
+    parser.add_argument('--quantize-forward-com', default=False, action='store_true',
+                        help='Quantize forward communications.')
+    parser.add_argument('--quantize-backward-com', default=False, action='store_true',
+                        help='Quantize backward communications.')
+    parser.add_argument('--quantize-buffer', default=False, action='store_true',
+                        help='Quantize buffer between forward and backward passes.')
 
     # ----- Other Options
     # compute setup
@@ -293,10 +301,19 @@ if __name__ == '__main__':
     # Model
     print('==> Building model..')
     quantizer = get_quantizer(args.quantizer)  # load the module using its name
-    arch = get_model(args.dataset, args.model, args.last_bn_zero_init, store_input=not args.remove_ctx_input,
-                     store_param=not args.remove_ctx_param, store_vjp=args.store_vjp, quantizer=quantizer,
-                     accumulation_steps=args.accumulation_steps, accumulation_averaging=args.accumulation_averaging,
-                     approximate_input=args.approximate_input)
+    arch = get_model(
+        args.dataset, args.model, args.last_bn_zero_init,
+        store_vjp=args.store_vjp,
+        store_input=not args.remove_ctx_input,
+        store_param=not args.remove_ctx_param,
+        approximate_input=args.approximate_input,
+        accumulation_steps=args.accumulation_steps,
+        accumulation_averaging=args.accumulation_averaging,
+        quantizer=quantizer,
+        quantize_forward_communication=args.quantize_forward_com,
+        quantize_backward_communication=args.quantize_backward_com,
+        quantize_buffer=args.quantize_buffer,
+    )
 
     # Optimization
     if args.goyal_lr_scaling:

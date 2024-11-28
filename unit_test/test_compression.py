@@ -43,7 +43,7 @@ class TestCompressionEffects:
         y = mod.forward(x)
         y_comp = mod_comp.forward(x)
 
-        y_hat = mod_comp.quantizer.dequantize_input_forward(y_comp)
+        y_hat = mod_comp.quantizer.dequantize_forward_communication(y_comp)
         # note: you need to use both atol and rtol due to instabilities around 0 (it's classical)
         assert torch.allclose(y_hat, y, atol=mod_comp.quantizer.tol_activation, rtol=mod_comp.quantizer.tol_activation)
 
@@ -52,7 +52,7 @@ class TestCompressionEffects:
         y = mod.forward(x, idx)
         y_comp = mod_comp.forward(x, idx)
 
-        y_hat = mod_comp.quantizer.dequantize_input_forward(y_comp)
+        y_hat = mod_comp.quantizer.dequantize_forward_communication(y_comp)
         assert torch.allclose(y_hat, y, atol=mod_comp.quantizer.tol_activation, rtol=mod_comp.quantizer.tol_activation)
 
         # ----- compare compressed and not compressed buffer -----
@@ -79,7 +79,7 @@ class TestCompressionEffects:
 
         _, grad_b, _ = mod.backward(None, grad_output, 0)
         _, grad_comp_b, _ = mod_comp.backward(None, grad_output, 0)
-        grad_hat_b = mod_comp.quantizer.dequantize_grad_output_backward(grad_comp_b)
+        grad_hat_b = mod_comp.quantizer.dequantize_backward_communication(grad_comp_b)
         if isinstance(grad_b, tuple):
             for f, f_hat in zip(grad_b, grad_hat_b):
                 assert torch.allclose(f_hat, f, atol=mod_comp.quantizer.tol_buffer, rtol=mod_comp.quantizer.tol_buffer)

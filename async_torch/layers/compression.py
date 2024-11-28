@@ -16,7 +16,7 @@ class QuantizGeneric:
         self.tol_gradient = tol_gradient
         self.tol_buffer = tol_buffer
 
-    def quantize_grad_input_backward(self, x):
+    def quantize_backward_communication(self, x):
         """
         This function is used in the backward pass to compress gradients
         which comes from the past layer. Elements which are not tensors
@@ -34,7 +34,7 @@ class QuantizGeneric:
         """
         pass
 
-    def dequantize_grad_output_backward(self, x):
+    def dequantize_backward_communication(self, x):
         """
         This function is used in the backward pass to decompress tuples of gradients
         which will be sent to the next layer. 
@@ -50,7 +50,7 @@ class QuantizGeneric:
             transforms back into decompressed elements of th same size as x_compressed.
         """
     
-    def dequantize_input_forward(self, x):
+    def dequantize_forward_communication(self, x):
         """
         This function is used in the forward pass to decompress tuples of compressed
         activations which comes from the previous layer.
@@ -66,7 +66,7 @@ class QuantizGeneric:
             transforms back into decompressed elements of th same size as x_compressed.
         """
     
-    def quantize_output_forward(self, x):
+    def quantize_forward_communication(self, x):
         """
         This function is used in the forward pass to compress activations
         which comes from the past layer. Elements which are not tensors
@@ -131,23 +131,41 @@ class QuantizAll(QuantizGeneric):
     def _dequantize(self, x):
         pass
 
-    def quantize_grad_input_backward(self, x):
-        return self._quantize(x)
+    def quantize_backward_communication(self, x):
+        if torch.is_tensor(x):
+            return self._quantize(x)
+        elif isinstance(x, tuple):
+            return tuple(self._quantize(xx) for xx in x)
 
-    def dequantize_grad_output_backward(self, x):
-        return self._dequantize(x)
+    def dequantize_backward_communication(self, x):
+        if torch.is_tensor(x):
+            return self._dequantize(x)
+        elif isinstance(x, tuple):
+            return tuple(self._dequantize(xx) for xx in x)
     
-    def dequantize_input_forward(self, x):
-        return self._dequantize(x)
+    def dequantize_forward_communication(self, x):
+        if torch.is_tensor(x):
+            return self._dequantize(x)
+        elif isinstance(x, tuple):
+            return tuple(self._dequantize(xx) for xx in x)
     
-    def quantize_output_forward(self, x):
-        return self._quantize(x)
+    def quantize_forward_communication(self, x):
+        if torch.is_tensor(x):
+            return self._quantize(x)
+        elif isinstance(x, tuple):
+            return tuple(self._quantize(xx) for xx in x)
         
     def dequantize_buffer_backward(self, buffer):
-        return tuple(self._dequantize(x) for x in buffer)
+        if torch.is_tensor(buffer):
+            return self._dequantize(buffer)
+        elif isinstance(buffer, tuple):
+            return tuple(self._dequantize(x) for x in buffer)
 
     def quantize_buffer_forward(self, buffer):
-        return tuple(self._quantize(x) for x in buffer)
+        if torch.is_tensor(buffer):
+            return self._quantize(buffer)
+        elif isinstance(buffer, tuple):
+            return tuple(self._quantize(x) for x in buffer)
 
 
 class QuantizSimple(QuantizAll):
@@ -203,8 +221,7 @@ class Quantiz16Bits(QuantizAll):
         if torch.is_tensor(x):
             return x.to(torch.float16)
         elif isinstance(x, tuple):
-            return self._quantize(xx for xx in x)
-            # return tuple(xx.to(torch.float16) for xx in x)
+            return tuple(self._quantize(xx) for xx in x)
         else:
             return x
 
@@ -212,8 +229,7 @@ class Quantiz16Bits(QuantizAll):
         if torch.is_tensor(x):
             return x.to(torch.float32)
         elif isinstance(x, tuple):
-            return self._dequantize(xx for xx in x)
-            # return tuple(xx.to(torch.float32) for xx in x)
+            return tuple(self._dequantize(xx) for xx in x)
         else:
             return x
 
