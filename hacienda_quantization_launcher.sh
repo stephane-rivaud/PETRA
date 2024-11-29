@@ -55,14 +55,14 @@ output_dir='logs/iclr2025-async-quantization' # output directory for logs and ch
 
 # command parameters
 dataset='cifar10'
-model='revnet34'
+model='revnet50'
 synchronous='false'
 store_vjp='false'
 store_input='false'
 store_param='false'
 approximate_input='false'
 accumulation_steps=16
-quantize_buffer='true'
+quantize_buffer='false'
 lr=0.1
 batch_size=64
 wandb_project='iclr2025-async-rebuttal-quantization'
