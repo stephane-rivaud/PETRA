@@ -50,21 +50,14 @@ mkdir -p slurm
 # ----- Parameters -----
 
 # job parameters
-gpu_type='none'                           # 'a100', 'v100', 'v100-16g', 'v100-32g'
 output_dir='logs/iclr2025-async-quantization' # output directory for logs and checkpoints
 
 # command parameters
 dataset='cifar10'
 model='revnet50'
 synchronous='false'
-store_vjp='false'
-store_input='false'
-store_param='false'
-approximate_input='false'
 accumulation_steps=16
-quantize_buffer='false'
-lr=0.1
-batch_size=64
+quantize_buffer='true'
 wandb_project='iclr2025-async-rebuttal-quantization'
 
 # Call the function with multiple arguments
@@ -77,7 +70,7 @@ IFS=$'\n' read -d '' -r partition time <<< "$output"
 sbatch \
   --partition=$partition \
   --time=$time \
-  hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
+  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
 
 # testing a single job
 #for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
@@ -89,7 +82,7 @@ sbatch \
 #        output=$(sbatch_arguments "$dataset" "$model")
 #        IFS=$'\n' read -d '' -r partition time <<< "$output"
 #
-#        sbatch hacienda_quantization_script.sh $gpu_type $output_dir $dataset $model $synchronous $store_vjp $store_input $store_param $approximate_input $accumulation_steps $quantize_buffer $lr $batch_size $wandb_project
+#        sbatch hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
 #
 #      done
 #    done

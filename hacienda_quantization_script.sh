@@ -20,15 +20,15 @@ conda info --envs
 
 # ----- Parameters -----
 # job parameters
-output_dir=$2 # output directory for logs and checkpoints
+output_dir=$1 # output directory for logs and checkpoints
 
 # command parameters
-dataset=$3
-model=$4
-synchronous=$5
-accumulation_steps=$6
-quantize_buffer=$7
-wandb_project=$8
+dataset=$2
+model=$3
+synchronous=$4
+accumulation_steps=$5
+quantize_buffer=$6
+wandb_project=$7
 # ---------------------
 filename="${dataset}-${model}-sync_${synchronous}-acc_steps_${accumulation_steps}-quantize_buffer_${quantize_buffer}"
 
