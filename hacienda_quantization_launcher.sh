@@ -30,7 +30,7 @@ sbatch_arguments() {
     fi
   elif [ $model == "revnet50" ]; then
     local partition="electronic"
-    local time="15:30:00"
+    local time="67:00:00"
   elif [ $model == "revnet101" ]; then
     local partition="electronic"
     local time="15:30:00"
@@ -53,7 +53,7 @@ output_dir='logs/iclr2025-async-rebuttal' # output directory for logs and checkp
 
 # command parameters
 dataset='imagenet32'
-model='revnet50'
+model='revnet101'
 synchronous='false'
 store_vjp='false'
 store_input='false'
