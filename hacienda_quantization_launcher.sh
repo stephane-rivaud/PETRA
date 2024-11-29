@@ -28,9 +28,11 @@ sbatch_arguments() {
     elif [ $dataset == "imagenet32" ]; then
       local time="32:00:00"
     fi
+
   elif [ $model == "revnet50" ]; then
     local partition="electronic"
     local time="67:00:00"
+
   elif [ $model == "revnet101" ]; then
     local partition="electronic"
     local time="15:30:00"
@@ -52,8 +54,8 @@ gpu_type='none'                           # 'a100', 'v100', 'v100-16g', 'v100-32
 output_dir='logs/iclr2025-async-rebuttal' # output directory for logs and checkpoints
 
 # command parameters
-dataset='imagenet32'
-model='revnet101'
+dataset='cifar10'
+model='revnet34'
 synchronous='false'
 store_vjp='false'
 store_input='false'
