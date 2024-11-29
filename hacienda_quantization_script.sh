@@ -68,7 +68,7 @@ checkpoint="${checkpoint_dir}/$filename.pth"
 # ----- Building command -----
 command="python -u main.py"
 command="${command} --use-wandb --wandb-project $wandb_project"
-#command="${command} --name-checkpoint $checkpoint --resume $checkpoint"
+command="${command} --name-checkpoint $checkpoint --resume $checkpoint"
 
 # dataset
 if [ "$dataset" == 'cifar10' ] || [ "$dataset" == 'cifar100' ]; then
