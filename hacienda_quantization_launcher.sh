@@ -54,7 +54,7 @@ output_dir='logs/iclr2025-async-quantization' # output directory for logs and ch
 
 # command parameters
 dataset='cifar10'
-model='revnet50'
+model='revnet101'
 synchronous='false'
 accumulation_steps=16
 quantize_buffer='false'
