@@ -9,8 +9,16 @@ sbatch_arguments() {
 
   # Perform some operations (example: concatenate arguments)
   if [ $model == "revnet18" ]; then
+    # partition
     local partition="funky"
-    local time="04:30:00"
+
+    # time
+    if [ $dataset == "cifar10" ] || [ $dataset == "cifar100" ]; then
+      local time="04:30:00"
+    elif [ $dataset == "imagenet32" ]; then
+      local time="19:00:00"
+    fi
+
   elif [ $model == "revnet34" ]; then
     local partition="jazzy"
     local time="07:30:00"
@@ -39,7 +47,7 @@ output_dir='logs/iclr2025-async-rebuttal' # output directory for logs and checkp
 
 # command parameters
 dataset='imagenet32'
-model='revnet18'
+model='revnet34'
 synchronous='false'
 store_vjp='false'
 store_input='false'
