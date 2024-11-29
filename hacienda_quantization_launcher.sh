@@ -34,7 +34,7 @@ sbatch_arguments() {
     local time="67:00:00"
 
   elif [ $model == "revnet101" ]; then
-    local partition="electronic"
+    local partition="hard"
     local time="15:30:00"
   fi
 
@@ -53,7 +53,7 @@ mkdir -p slurm
 output_dir='logs/iclr2025-async-quantization' # output directory for logs and checkpoints
 
 # command parameters
-dataset='cifar10'
+dataset='cifar100'
 model='revnet101'
 synchronous='false'
 accumulation_steps=16
