@@ -57,7 +57,7 @@ dataset='cifar10'
 model='revnet50'
 synchronous='false'
 accumulation_steps=16
-quantize_buffer='true'
+quantize_buffer='false'
 wandb_project='iclr2025-async-rebuttal-quantization'
 
 # Call the function with multiple arguments
@@ -67,10 +67,17 @@ output=$(sbatch_arguments "$dataset" "$model")
 IFS=$'\n' read -d '' -r partition time <<< "$output"
 
 #echo "Partition: $partition, Time: $time"
-sbatch \
-  --partition=$partition \
-  --time=$time \
-  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+for quantize_buffer in 'true' 'false'; do
+  sbatch \
+    --partition=$partition \
+    --time=$time \
+    hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+done
+
+#sbatch \
+#  --partition=$partition \
+#  --time=$time \
+#  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
 
 # testing a single job
 #for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
