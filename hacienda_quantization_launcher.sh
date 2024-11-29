@@ -20,10 +20,10 @@ sbatch_arguments() {
     fi
 
   elif [ $model == "revnet34" ]; then
-    local partition="jazzy"
+    local partition="funky"
     local time="07:30:00"
   elif [ $model == "revnet50" ]; then
-    local partition="jazzy"
+    local partition="funky"
     local time="15:30:00"
   elif [ $model == "revnet101" ]; then
     local partition="electronic"
