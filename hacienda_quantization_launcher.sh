@@ -82,14 +82,14 @@ output=$(sbatch_arguments "$dataset" "$model")
 IFS=$'\n' read -d '' -r partition time <<< "$output"
 
 # ----- Launch jobs -----
-dataset='cifar10'
-model='revnet34'
-synchronous='false'
-quantize_buffer='true'
-sbatch \
-  --partition=$partition \
-  --time=$time \
-  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+#dataset='cifar10'
+#model='revnet34'
+#synchronous='false'
+#quantize_buffer='true'
+#sbatch \
+#  --partition=$partition \
+#  --time=$time \
+#  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
 
 dataset='cifar10'
 model='revnet50'
@@ -104,28 +104,30 @@ sbatch \
 dataset='cifar10'
 model='revnet101'
 synchronous='true'
-for quantize_buffer in 'true' 'false'; do
+#for quantize_buffer in 'true' 'false'; do
+for quantize_buffer in 'false'; do
   sbatch \
     --partition=$partition \
     --time=$time \
     hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
 done
 
-dataset='cifar100'
-model='revnet50'
-for synchronous in 'true' 'false'; do
-  for quantize_buffer in 'true' 'false'; do
-    sbatch \
-      --partition=$partition \
-      --time=$time \
-      hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
-  done
-done
+#dataset='cifar100'
+#model='revnet50'
+#for synchronous in 'true' 'false'; do
+#  for quantize_buffer in 'true' 'false'; do
+#    sbatch \
+#      --partition=$partition \
+#      --time=$time \
+#      hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+#  done
+#done
 
 dataset='cifar100'
 model='revnet101'
 synchronous='true'
-for quantize_buffer in 'true' 'false'; do
+#for quantize_buffer in 'true' 'false'; do
+for quantize_buffer in 'false'; do
   sbatch \
     --partition=$partition \
     --time=$time \
