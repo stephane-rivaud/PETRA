@@ -31,12 +31,26 @@ sbatch_arguments() {
     fi
 
   elif [ $model == "revnet50" ]; then
+    # partition
     local partition="electronic"
-    local time="67:00:00"
+
+    # time
+    if [ $dataset == "cifar10" ] || [ $dataset == "cifar100" ]; then
+      local time="13:00:00"
+    elif [ $dataset == "imagenet32" ]; then
+      local time="67:00:00"
+    fi
 
   elif [ $model == "revnet101" ]; then
+    # partition
     local partition="hard"
-    local time="19:00:00"
+
+    # time
+    if [ $dataset == "cifar10" ] || [ $dataset == "cifar100" ]; then
+      local time="16:00:00"
+    elif [ $dataset == "imagenet32" ]; then
+      local time="115:00:00"
+    fi
   fi
 
   # Output the results
