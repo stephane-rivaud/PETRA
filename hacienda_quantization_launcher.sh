@@ -22,6 +22,7 @@ sbatch_arguments() {
   elif [ $model == "revnet34" ]; then
     # partition
     local partition="funky"
+
     # time
     if [ $dataset == "cifar10" ] || [ $dataset == "cifar100" ]; then
       local time="07:30:00"
@@ -35,7 +36,7 @@ sbatch_arguments() {
 
   elif [ $model == "revnet101" ]; then
     local partition="hard"
-    local time="15:30:00"
+    local time="19:00:00"
   fi
 
   # Output the results
@@ -53,8 +54,8 @@ mkdir -p slurm
 output_dir='logs/iclr2025-async-quantization' # output directory for logs and checkpoints
 
 # command parameters
-dataset='cifar100'
-model='revnet101'
+dataset='cifar10'
+model='revnet18'
 synchronous='false'
 accumulation_steps=16
 quantize_buffer='false'
@@ -66,7 +67,29 @@ output=$(sbatch_arguments "$dataset" "$model")
 # Read the output into variables
 IFS=$'\n' read -d '' -r partition time <<< "$output"
 
-#echo "Partition: $partition, Time: $time"
+# ----- Launch jobs -----
+dataset='cifar10'
+model='revnet34'
+synchronous='false'
+quantize_buffer='true'
+sbatch \
+  --partition=$partition \
+  --time=$time \
+  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+
+dataset='cifar10'
+model='revnet50'
+synchronous='true'
+quantize_buffer='true'
+sbatch \
+  --partition=$partition \
+  --time=$time \
+  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+
+
+dataset='cifar10'
+model='revnet101'
+synchronous='true'
 for quantize_buffer in 'true' 'false'; do
   sbatch \
     --partition=$partition \
@@ -74,24 +97,25 @@ for quantize_buffer in 'true' 'false'; do
     hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
 done
 
-#sbatch \
-#  --partition=$partition \
-#  --time=$time \
-#  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+dataset='cifar100'
+model='revnet50'
+for synchronous in 'true' 'false'; do
+  for quantize_buffer in 'true' 'false'; do
+    sbatch \
+      --partition=$partition \
+      --time=$time \
+      hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+  done
+done
 
-# testing a single job
-#for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
-#  for dataset in 'cifar10' 'cifar100'; do
-#    for synchronous in 'false' 'true'; do
-#      for quantize_buffer in 'true' 'false'; do
-#
-#         Get the partition and time
-#        output=$(sbatch_arguments "$dataset" "$model")
-#        IFS=$'\n' read -d '' -r partition time <<< "$output"
-#
-#        sbatch hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
-#
-#      done
-#    done
-#  done
-#done
+dataset='cifar100'
+model='revnet101'
+synchronous='true'
+for quantize_buffer in 'true' 'false'; do
+  sbatch \
+    --partition=$partition \
+    --time=$time \
+    hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+done
+
+
