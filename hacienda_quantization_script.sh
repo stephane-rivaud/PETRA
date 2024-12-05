@@ -23,19 +23,19 @@ dataset=$1
 model=$2
 synchronous=$3
 accumulation_steps=$4
-quantize_buffer=$5
+quantizer=$5
 wandb_project=$6
 output_dir=$7
 
 # ---------------------
-filename="${dataset}-${model}-sync_${synchronous}-acc_steps_${accumulation_steps}-quantize_buffer_${quantize_buffer}"
+filename="${dataset}-${model}-sync_${synchronous}-acc_steps_${accumulation_steps}-quantizer_${quantizer}"
 
 # ----- Display parameters -----
 echo "dataset: $dataset"
 echo "model: $model"
 echo "synchronous: $synchronous"
 echo "accumulation_steps: $accumulation_steps"
-echo "quantize_buffer: $quantize_buffer"
+echo "quantizer: $quantizer"
 echo "wandb_project: $wandb_project"
 echo "filename: $filename"
 echo "output_dir: $output_dir"
@@ -100,9 +100,7 @@ command="${command} --accumulation-averaging"
 command="${command} --goyal-lr-scaling"
 
 # quantization
-if [ "$quantize_buffer" == 'true' ]; then
-  command="${command} --quantizer Quantiz16Bits --quantize-buffer"
-fi
+command="${command} --quantizer $quantizer --quantize-buffer"
 
 # scheduling
 if [ "$dataset" == 'cifar10' ] || [ "$dataset" == 'cifar100' ]; then
