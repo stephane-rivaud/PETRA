@@ -65,78 +65,31 @@ mkdir -p slurm
 # ----- Parameters -----
 
 # job parameters
-output_dir='logs/iclr2025-async-quantization' # output directory for logs and checkpoints
 
 # command parameters
-dataset='cifar10'
-model='revnet18'
-synchronous='false'
-accumulation_steps=16
-quantize_buffer='false'
+dataset='cifar10'         # 'cifar10', 'cifar100', 'imagenet32'
+model='revnet18'          # 'revnet18', 'revnet34', 'revnet50', 'revnet101'
+synchronous='false'       # 'true', 'false'
+accumulation_steps=16     # number of accumulation steps
+quantizer='QuantizSimple' # 'QuantizSimple', 'Quantiz8Bits', 'Quantiz16Bits', 'QuantizQSGD'
 wandb_project='iclr2025-async-rebuttal-quantization'
+output_dir='logs/iclr2025-async-quantization' # output directory for logs and checkpoints
 
-# Call the function with multiple arguments
-output=$(sbatch_arguments "$dataset" "$model")
+for dataset in 'cifar10' 'cifar100'; do
+  for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
+    for synchronous in 'true' 'false'; do
+      for quantizer in 'Quantiz8Bits' 'QuantizQSGD'; do
 
-# Read the output into variables
-IFS=$'\n' read -d '' -r partition time <<<"$output"
+        # Call the function with multiple arguments
+        output=$(sbatch_arguments "$dataset" "$model")
 
-# ----- Launch jobs -----
-dataset='cifar10'
-model='revnet34'
-synchronous='false'
-quantize_buffer='true'
-output=$(sbatch_arguments "$dataset" "$model")
-IFS=$'\n' read -d '' -r partition time <<<"$output"
-sbatch \
-  --partition=$partition \
-  --time=$time \
-  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+        # Read the output into variables
+        IFS=$'\n' read -d '' -r partition time <<<"$output"
 
-dataset='cifar10'
-model='revnet50'
-synchronous='true'
-quantize_buffer='true'
-output=$(sbatch_arguments "$dataset" "$model")
-IFS=$'\n' read -d '' -r partition time <<<"$output"
-sbatch \
-  --partition=$partition \
-  --time=$time \
-  hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+        # ----- Launch jobs -----
+        sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir
 
-dataset='cifar10'
-model='revnet101'
-synchronous='true'
-for quantize_buffer in 'true' 'false'; do
-  output=$(sbatch_arguments "$dataset" "$model")
-  IFS=$'\n' read -d '' -r partition time <<<"$output"
-  sbatch \
-    --partition=$partition \
-    --time=$time \
-    hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
-done
-
-dataset='cifar100'
-model='revnet50'
-for synchronous in 'true' 'false'; do
-  for quantize_buffer in 'true' 'false'; do
-    output=$(sbatch_arguments "$dataset" "$model")
-    IFS=$'\n' read -d '' -r partition time <<<"$output"
-    sbatch \
-      --partition=$partition \
-      --time=$time \
-      hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
+      done
+    done
   done
-done
-
-dataset='cifar100'
-model='revnet101'
-synchronous='true'
-for quantize_buffer in 'true' 'false'; do
-  output=$(sbatch_arguments "$dataset" "$model")
-  IFS=$'\n' read -d '' -r partition time <<<"$output"
-  sbatch \
-    --partition=$partition \
-    --time=$time \
-    hacienda_quantization_script.sh $output_dir $dataset $model $synchronous $accumulation_steps $quantize_buffer $wandb_project
 done

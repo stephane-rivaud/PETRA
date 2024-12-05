@@ -168,50 +168,6 @@ class QuantizAll(QuantizGeneric):
             return tuple(self._quantize(x) for x in buffer)
 
 
-class QuantizSimple(QuantizAll):
-    def __init__(self):
-        tol = 0
-        super(QuantizSimple, self).__init__(tol)
-
-    def _quantize(self, x):
-        return x
-
-    def _dequantize(self, x):
-        return x
-
-
-"""
-class Quantiz8Bits(QuantizAll): # compression
-    def __init__(self, *args, **kwargs):
-        self.range = 2 ** 8 - 1
-        tol = 2**-7
-        super(Quantiz8Bits, self).__init__(tol, *args, **kwargs)
-
-    def _quantize(self, x):
-        if torch.is_tensor(x):
-            x_sgn = torch.sign(x)
-            x_abs = x.abs()
-            x_norm = x_abs.max()
-            x_scaled = x_abs / x_norm
-            x_prequant = x_scaled * self.range + 0.5
-            x_quant = x_prequant.to(torch.uint8)
-            return x_quant, x_sgn, x_norm
-        else:
-            return x
-
-    def _dequantize(self, x):
-        if isinstance(x,tuple):
-            x, x_sgn, x_norm = x
-            x_prequant = x.to(torch.float32)
-            x_scaled = x_prequant / self.range
-            x_abs = x_scaled * x_norm
-            xhat = x_abs * x_sgn
-            return xhat
-        else:
-            return x
-"""
-
-
 class Quantiz16Bits(QuantizAll):
     def __init__(self):
         tol = 2**-11 # 5 bit exposant, 10+1 bits sign+ fraction 
@@ -234,7 +190,58 @@ class Quantiz16Bits(QuantizAll):
             return x
 
 
-"""
+class QuantizSimple(QuantizAll):
+    def __init__(self):
+        tol = 0
+        super(QuantizSimple, self).__init__(tol)
+
+    def _quantize(self, x):
+        return x
+
+    def _dequantize(self, x):
+        return x
+
+
+class Quantiz8Bits(QuantizAll): # compression
+    def __init__(self, *args, **kwargs):
+        self.range = 2 ** 8 - 1
+        tol = 2**-7
+        super(Quantiz8Bits, self).__init__(tol, *args, **kwargs)
+
+    def _quantize(self, x):
+        if torch.is_tensor(x):
+            x_sgn = torch.sign(x)
+            x_abs = x.abs()
+            x_norm = x_abs.max()
+            x_scaled = x_abs / x_norm
+            x_prequant = x_scaled * self.range + 0.5
+            x_quant = x_prequant.to(torch.uint8)
+            return {
+                'x_quant': x_quant,
+                'x_sgn': x_sgn,
+                'x_norm': x_norm
+            }
+        elif isinstance(x, tuple):
+            return tuple(self._quantize(xx) for xx in x)
+        else:
+            return x
+
+    def _dequantize(self, x):
+        if isinstance(x, dict):
+            x_quant = x['x_quant']
+            x_sgn = x['x_sgn']
+            x_norm = x['x_norm']
+            x_prequant = x_quant.to(torch.float32)
+            x_scaled = x_prequant / self.range
+            x_abs = x_scaled * x_norm
+            xhat = x_abs * x_sgn
+            return xhat
+        elif isinstance(x, tuple):
+            return tuple(self._dequantize(xx) for xx in x)
+        else:
+            return x
+
+
 class QuantizQSGD(QuantizAll):
     def __init__(self, *args, **kwargs):
         tol = 2**-2
@@ -263,4 +270,3 @@ class QuantizQSGD(QuantizAll):
 
     def _dequantize(self, x):
         return x
-"""

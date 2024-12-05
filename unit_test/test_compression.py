@@ -24,7 +24,7 @@ class SumAddConstant(AsynchronousGenericLayer):
 
 
 class TestCompressionEffects:
-    @pytest.mark.parametrize("quantizer_name", ['QuantizSimple', 'Quantiz16Bits'])
+    @pytest.mark.parametrize("quantizer_name", ['QuantizSimple', 'Quantiz16Bits' 'Quantiz8Bits'])
     @pytest.mark.parametrize(
         'stuff',
         [

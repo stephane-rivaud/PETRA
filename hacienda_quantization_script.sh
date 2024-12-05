@@ -19,16 +19,14 @@ source activate $conda_env
 conda info --envs
 
 # ----- Parameters -----
-# job parameters
-output_dir=$1 # output directory for logs and checkpoints
+dataset=$1
+model=$2
+synchronous=$3
+accumulation_steps=$4
+quantize_buffer=$5
+wandb_project=$6
+output_dir=$7
 
-# command parameters
-dataset=$2
-model=$3
-synchronous=$4
-accumulation_steps=$5
-quantize_buffer=$6
-wandb_project=$7
 # ---------------------
 filename="${dataset}-${model}-sync_${synchronous}-acc_steps_${accumulation_steps}-quantize_buffer_${quantize_buffer}"
 
