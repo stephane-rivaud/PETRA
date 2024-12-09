@@ -47,7 +47,7 @@ sbatch_arguments() {
 
     # time
     if [ $dataset == "cifar10" ] || [ $dataset == "cifar100" ]; then
-      local time="16:00:00"
+      local time="19:00:00"
     elif [ $dataset == "imagenet32" ]; then
       local time="115:00:00"
     fi
@@ -75,25 +75,57 @@ quantizer='QuantizSimple' # 'QuantizSimple', 'Quantiz8Bits', 'Quantiz16Bits', 'Q
 wandb_project='iclr2025-async-rebuttal-quantization'
 output_dir='logs/iclr2025-async-quantization' # output directory for logs and checkpoints
 
-for dataset in 'cifar10' 'cifar100'; do
-  for model in 'revnet18' 'revnet34' 'revnet50' 'revnet101'; do
-    for synchronous in 'true' 'false'; do
-      for quantizer in 'Quantiz8Bits' 'QuantizQSGD'; do
 
-        # Call the function with multiple arguments
-        output=$(sbatch_arguments "$dataset" "$model")
+# ----- Launch jobs -----
+# RevNet50
+dataset='cifar100'
+model='revnet50'
+synchronous='true'
+quantizer='Quantiz8Bits'
 
-        # Read the output into variables
-        IFS=$'\n' read -d '' -r partition time <<<"$output"
+output=$(sbatch_arguments "$dataset" "$model")
+IFS=$'\n' read -d '' -r partition time <<<"$output"
+command="sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir"
+echo "$command"
+eval "$command"
 
-        # ----- Launch jobs -----
-        command="sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir"
-        echo "$command"
+synchronous='false'
+quantizer='Quantiz16Bits'
 
-        # Uncomment to run the command
-        # eval "$command"
+output=$(sbatch_arguments "$dataset" "$model")
+IFS=$'\n' read -d '' -r partition time <<<"$output"
+command="sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir"
+echo "$command"
+eval "$command"
 
-      done
-    done
-  done
+# RevNet101
+dataset='cifar10'
+model='revnet101'
+synchronous='false'
+for quantizer in 'Quantiz8Bits' 'QuantizQSGD'; do
+  output=$(sbatch_arguments "$dataset" "$model")
+  IFS=$'\n' read -d '' -r partition time <<<"$output"
+  command="sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir"
+  echo "$command"
+  eval "$command"
+done
+
+dataset='cifar100'
+model='revnet101'
+synchronous='true'
+for quantizer in 'QuantizSimple' 'QuantizQSGD'; do
+  output=$(sbatch_arguments "$dataset" "$model")
+  IFS=$'\n' read -d '' -r partition time <<<"$output"
+  command="sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir"
+  echo "$command"
+  eval "$command"
+done
+
+synchronous='false'
+for quantizer in 'Quantiz8Bits' 'QuantizQSGD'; do
+  output=$(sbatch_arguments "$dataset" "$model")
+  IFS=$'\n' read -d '' -r partition time <<<"$output"
+  command="sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir"
+  echo "$command"
+  eval "$command"
 done
