@@ -17,7 +17,7 @@ for dataset in 'cifar10' 'cifar100'; do
         for synchronous in 'true' 'false'; do
           command="sbatch edouard_fixed_size_script.sh $dataset $n_layers $hidden_size $synchronous $accumulation_steps $lr"
           echo $command
-          #eval $command
+          eval $command
         done
       done
     done
