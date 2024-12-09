@@ -87,7 +87,11 @@ for dataset in 'cifar10' 'cifar100'; do
         IFS=$'\n' read -d '' -r partition time <<<"$output"
 
         # ----- Launch jobs -----
-        sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir
+        command="sbatch --partition=$partition --time=$time hacienda_quantization_script.sh $dataset $model $synchronous $accumulation_steps $quantizer $wandb_project $output_dir"
+        echo "$command"
+
+        # Uncomment to run the command
+        # eval "$command"
 
       done
     done
