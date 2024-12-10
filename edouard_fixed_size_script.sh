@@ -80,7 +80,6 @@ if [ "$synchronous" == 'true' ]; then
 fi
 
 # optimization
-lr=0.1
 command="${command} --optimizer sgd --lr $lr"
 if [ "$dataset" == 'cifar10' ] || [ "$dataset" == 'cifar100' ]; then
   command="${command} --weight-decay 0.0005"
