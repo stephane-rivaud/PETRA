@@ -29,7 +29,7 @@ def get_dataset(dataset, dir):
 
     elif dataset == 'cifar100':
         input_size = (3, 32, 32)
-        num_classes = 10
+        num_classes = 100
         transform_train = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
