@@ -4,7 +4,7 @@
 # command parameters
 dataset='cifar10'
 n_layers=10
-hidden_size=256
+hidden_size=512
 synchronous='true'
 accumulation_steps=1
 lr=0.2
@@ -13,7 +13,7 @@ lr=0.2
 for dataset in 'cifar10' 'cifar100'; do
   for accumulation_steps in 1 2 4 8 16; do
     for n_layers in 5 10; do
-      for hidden_size in 64 128 256; do
+      for lr in 0.0125 0.025 0.05 0.1; do
         command="sbatch fixed_size_script.sh $dataset $n_layers $hidden_size $synchronous $accumulation_steps $lr"
         echo $command
         eval $command
