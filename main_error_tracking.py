@@ -199,7 +199,7 @@ def train(epoch, dataloader, model, model_sync_forward, model_sync_backward, syn
                                                      dataset_name)
             model.set_lr(lr)
 
-        # costumized goyal scheduler
+        # customized goyal scheduler
         if opt.scheduler == 'goyal':
             k_step = num_batches * epoch + batch_idx
             n_step_tot = len(dataloader) * opt.max_epoch

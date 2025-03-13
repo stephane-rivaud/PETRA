@@ -161,7 +161,7 @@ def train(epoch, dataloader, model, sync_period, device, dtype, opt):
                                                      dataset_name)
             model.set_lr(lr)
 
-        # costumized goyal scheduler
+        # customized goyal scheduler
         if opt.scheduler == 'goyal':
             k_step = len(dataloader) * epoch + batch_idx
             n_step_tot = len(dataloader) * opt.max_epoch
