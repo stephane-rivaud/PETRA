@@ -12,7 +12,7 @@ import time
 import argparse
 from functools import partial
 
-from dataset import get_dataset
+from scripts.dataset import get_dataset
 from async_torch.layers.compression import get_quantizer, QuantizSimple
 from async_torch.models.utils import get_model
 from async_torch.sequential_layers import AsynchronousSequential, SynchronousSequential, AsynchronousParallel
